@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}名刺登録 - 名刺管理{% endblock %}
+
+{% block content %}
+<h4 class="mb-3"><i class="bi bi-camera me-1"></i>名刺登録</h4>
+
+<form method="post" action="{{ url_for('cards.create_card') }}" enctype="multipart/form-data">
+    <!-- 表面画像 -->
+    <div class="mb-3">
+        <label class="form-label fw-bold">表面の画像 <span class="text-danger">*</span></label>
+        <div id="front-preview" class="mb-2" style="display:none;">
+            <img id="front-preview-img" class="img-fluid rounded border" style="max-height: 200px;">
+        </div>
+        <input type="file" name="front_image" id="front_image" class="form-control"
+               accept="image/*" capture="environment" required
+               onchange="previewImage(this, 'front-preview', 'front-preview-img')">
+        <div class="form-text">カメラで撮影、またはファイルを選択</div>
+    </div>
+
+    <!-- 裏面画像 -->
+    <div class="mb-3">
+        <div id="back-section" style="display:none;">
+            <label class="form-label fw-bold">裏面の画像</label>
+            <div id="back-preview" class="mb-2" style="display:none;">
+                <img id="back-preview-img" class="img-fluid rounded border" style="max-height: 200px;">
+            </div>
+            <input type="file" name="back_image" id="back_image" class="form-control"
+                   accept="image/*" capture="environment"
+                   onchange="previewImage(this, 'back-preview', 'back-preview-img')">
+        </div>
+        <button type="button" id="add-back-btn" class="btn btn-outline-secondary btn-sm"
+                onclick="document.getElementById('back-section').style.display='block'; this.style.display='none';">
+            <i class="bi bi-plus me-1"></i>裏面を追加
+        </button>
+    </div>
+
+    <!-- 公開設定 -->
+    <div class="mb-3">
+        <label class="form-label fw-bold">公開設定</label>
+        <select name="visibility" class="form-select">
+            <option value="shared">社内共有</option>
+            <option value="private">自分のみ</option>
+        </select>
+    </div>
+
+    <!-- 送信 -->
+    <div class="d-grid gap-2">
+        <button type="submit" class="btn btn-dark btn-lg" id="submit-btn">
+            <i class="bi bi-cpu me-1"></i>OCR読取を開始
+        </button>
+        <a href="{{ url_for('cards.index') }}" class="btn btn-outline-secondary">キャンセル</a>
+    </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function previewImage(input, previewDivId, imgId) {
+    const previewDiv = document.getElementById(previewDivId);
+    const img = document.getElementById(imgId);
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            img.src = e.target.result;
+            previewDiv.style.display = 'block';
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+// 送信時にローディング表示
+document.querySelector('form').addEventListener('submit', function() {
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>読取中...（しばらくお待ちください）';
+});
+</script>
+{% endblock %}

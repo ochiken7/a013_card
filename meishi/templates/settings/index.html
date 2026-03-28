@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}設定 - 名刺管理{% endblock %}
+
+{% block content %}
+<h4 class="mb-3"><i class="bi bi-gear me-1"></i>設定</h4>
+
+<!-- 表示名変更 -->
+<div class="card mb-3" style="max-width: 500px;">
+    <div class="card-header py-2">表示名</div>
+    <div class="card-body">
+        <form method="post" action="{{ url_for('settings.update_profile') }}">
+            <div class="input-group">
+                <input type="text" name="display_name" class="form-control"
+                       value="{{ current_user.display_name }}" required>
+                <button type="submit" class="btn btn-dark">変更</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- パスワード変更 -->
+<div class="card mb-3" style="max-width: 500px;">
+    <div class="card-header py-2">パスワード変更</div>
+    <div class="card-body">
+        <form method="post" action="{{ url_for('settings.change_password') }}">
+            <div class="mb-2">
+                <label class="form-label small">現在のパスワード</label>
+                <input type="password" name="current_password" class="form-control" required>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small">新しいパスワード</label>
+                <input type="password" name="new_password" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label small">新しいパスワード（確認）</label>
+                <input type="password" name="confirm_password" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-dark">パスワードを変更</button>
+        </form>
+    </div>
+</div>
+
+<!-- アカウント情報 -->
+<div class="card" style="max-width: 500px;">
+    <div class="card-header py-2">アカウント情報</div>
+    <div class="card-body small text-muted">
+        <div>メールアドレス: {{ current_user.email }}</div>
+        <div>権限: {{ '管理者' if current_user.is_admin else '一般ユーザー' }}</div>
+        <div>登録日: {{ current_user.created_at.strftime('%Y/%m/%d') }}</div>
+    </div>
+</div>
+{% endblock %}

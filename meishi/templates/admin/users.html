@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}ユーザー管理 - 名刺管理{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4><i class="bi bi-people me-1"></i>ユーザー管理</h4>
+    <a href="{{ url_for('admin.create_user') }}" class="btn btn-dark btn-sm">
+        <i class="bi bi-plus-circle me-1"></i>新規登録
+    </a>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>名前</th>
+                <th>メール</th>
+                <th>権限</th>
+                <th>登録日</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr>
+                <td>{{ user.display_name }}</td>
+                <td class="small">{{ user.email }}</td>
+                <td>
+                    {% if user.is_admin %}
+                    <span class="badge bg-dark">管理者</span>
+                    {% else %}
+                    <span class="badge bg-secondary">一般</span>
+                    {% endif %}
+                </td>
+                <td class="small text-muted">{{ user.created_at.strftime('%Y/%m/%d') }}</td>
+                <td>
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                            操作
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <button class="dropdown-item" data-bs-toggle="modal"
+                                        data-bs-target="#resetModal{{ user.id }}">
+                                    <i class="bi bi-key me-1"></i>パスワードリセット
+                                </button>
+                            </li>
+                            {% if user.id != current_user.id %}
+                            <li>
+                                <form method="post" action="{{ url_for('admin.toggle_admin', user_id=user.id) }}">
+                                    <button type="submit" class="dropdown-item">
+                                        <i class="bi bi-shield me-1"></i>
+                                        {{ '管理者権限を解除' if user.is_admin else '管理者権限を付与' }}
+                                    </button>
+                                </form>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </div>
+
+                    <!-- パスワードリセットモーダル -->
+                    <div class="modal fade" id="resetModal{{ user.id }}" tabindex="-1">
+                        <div class="modal-dialog modal-sm">
+                            <div class="modal-content">
+                                <form method="post" action="{{ url_for('admin.reset_password', user_id=user.id) }}">
+                                    <div class="modal-header py-2">
+                                        <h6 class="modal-title">パスワードリセット</h6>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <p class="small text-muted">{{ user.display_name }}</p>
+                                        <input type="password" name="new_password" class="form-control"
+                                               placeholder="新しいパスワード" required>
+                                    </div>
+                                    <div class="modal-footer py-1">
+                                        <button type="submit" class="btn btn-dark btn-sm">リセット</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

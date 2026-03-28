@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}CSV入出力 - 名刺管理{% endblock %}
+
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-filetype-csv me-2"></i>CSV入出力</h4>
+
+<div class="row g-4">
+    <!-- エクスポート -->
+    <div class="col-12 col-md-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-download me-1"></i>エクスポート
+                </h5>
+                <p class="card-text text-muted">
+                    自分の名刺と共有名刺をCSVファイルとしてダウンロードします。
+                    Excel等の表計算ソフトで開くことができます。
+                </p>
+                <a href="{{ url_for('csv_io.export') }}" class="btn btn-primary">
+                    <i class="bi bi-download me-1"></i>CSVダウンロード
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- インポート -->
+    <div class="col-12 col-md-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-upload me-1"></i>インポート
+                </h5>
+                <p class="card-text text-muted">
+                    CSVファイルから名刺データを一括登録します。
+                    エクスポートしたCSVと同じ形式のファイルを使用してください。
+                </p>
+                <form action="{{ url_for('csv_io.import_csv') }}" method="post" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <input type="file" class="form-control" name="csv_file" accept=".csv" required>
+                    </div>
+                    <button type="submit" class="btn btn-success"
+                            onclick="return confirm('CSVファイルをインポートしますか？')">
+                        <i class="bi bi-upload me-1"></i>インポート実行
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

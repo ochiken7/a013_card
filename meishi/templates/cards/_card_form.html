@@ -1,0 +1,322 @@
+{# 名刺情報フォーム（確認画面・編集画面で共用） #}
+{# 変数: form_data (dict), image_urls (list), mode ("confirm" or "edit") #}
+
+<!-- 画像プレビュー -->
+{% if image_urls %}
+<div class="row mb-3">
+    {% for img in image_urls %}
+    <div class="col-6 col-md-4">
+        <div class="card">
+            <div class="card-header small py-1">{{ '表面' if img.side == 'front' else '裏面' }}</div>
+            {% if img.url %}
+            <img src="{{ img.url }}" class="card-img-bottom img-fluid" alt="名刺{{ '表面' if img.side == 'front' else '裏面' }}"
+                 style="cursor: pointer; max-height: 200px; object-fit: contain;"
+                 onclick="window.open(this.src, '_blank')">
+            {% else %}
+            <div class="card-body text-muted small">画像を読み込めません</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- 会社情報 -->
+<div class="card mb-3">
+    <div class="card-header py-2"><i class="bi bi-building me-1"></i>会社情報</div>
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-12 col-md-6">
+                <label class="form-label small">会社名（日本語）</label>
+                <input type="text" name="company_name_ja" class="form-control"
+                       value="{{ form_data.company_name_ja if form_data else (card.company.name_ja if card and card.company else '') }}">
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small">会社名（英語）</label>
+                <input type="text" name="company_name_en" class="form-control"
+                       value="{{ form_data.company_name_en if form_data else (card.company.name_en if card and card.company else '') }}">
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small">部署名</label>
+                <input type="text" name="department" class="form-control"
+                       value="{{ form_data.department if form_data else (card.department or '') }}">
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small">役職</label>
+                <input type="text" name="position" class="form-control"
+                       value="{{ form_data.position if form_data else (card.position or '') }}">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 個人情報 -->
+<div class="card mb-3">
+    <div class="card-header py-2"><i class="bi bi-person me-1"></i>氏名</div>
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-12 col-md-4">
+                <label class="form-label small">氏名（漢字）</label>
+                <input type="text" name="name_kanji" class="form-control"
+                       value="{{ form_data.name_kanji if form_data else (card.name_kanji or '') }}">
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label small">フリガナ</label>
+                <input type="text" name="name_kana" class="form-control"
+                       value="{{ form_data.name_kana if form_data else (card.name_kana or '') }}">
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label small">ローマ字</label>
+                <input type="text" name="name_romaji" class="form-control"
+                       value="{{ form_data.name_romaji if form_data else (card.name_romaji or '') }}">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 電話番号 -->
+<div class="card mb-3">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-telephone me-1"></i>電話番号</span>
+        <button type="button" class="btn btn-outline-dark btn-sm" onclick="addPhone()">
+            <i class="bi bi-plus"></i>追加
+        </button>
+    </div>
+    <div class="card-body" id="phones-container">
+        {% set phones = form_data.phones if form_data else card.phones if card else [] %}
+        {% if phones %}
+            {% for phone in phones %}
+            <div class="row g-2 mb-2 phone-row">
+                <div class="col-7">
+                    <input type="text" name="phone_number[]" class="form-control form-control-sm"
+                           placeholder="電話番号" value="{{ phone.number if phone is mapping else phone.phone_number }}">
+                </div>
+                <div class="col-4">
+                    <select name="phone_type[]" class="form-select form-select-sm">
+                        {% set ptype = phone.type if phone is mapping else phone.phone_type %}
+                        <option value="main" {{ 'selected' if ptype == 'main' }}>代表</option>
+                        <option value="direct" {{ 'selected' if ptype == 'direct' }}>直通</option>
+                        <option value="mobile" {{ 'selected' if ptype == 'mobile' }}>携帯</option>
+                        <option value="fax" {{ 'selected' if ptype == 'fax' }}>FAX</option>
+                    </select>
+                </div>
+                <div class="col-1">
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('.phone-row').remove()">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="row g-2 mb-2 phone-row">
+                <div class="col-7">
+                    <input type="text" name="phone_number[]" class="form-control form-control-sm" placeholder="電話番号">
+                </div>
+                <div class="col-4">
+                    <select name="phone_type[]" class="form-select form-select-sm">
+                        <option value="main">代表</option>
+                        <option value="direct">直通</option>
+                        <option value="mobile">携帯</option>
+                        <option value="fax">FAX</option>
+                    </select>
+                </div>
+                <div class="col-1">
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('.phone-row').remove()">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- メールアドレス -->
+<div class="card mb-3">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-envelope me-1"></i>メールアドレス</span>
+        <button type="button" class="btn btn-outline-dark btn-sm" onclick="addEmail()">
+            <i class="bi bi-plus"></i>追加
+        </button>
+    </div>
+    <div class="card-body" id="emails-container">
+        {% set emails = form_data.emails if form_data else card.emails if card else [] %}
+        {% if emails %}
+            {% for em in emails %}
+            <div class="row g-2 mb-2 email-row">
+                <div class="col-7">
+                    <input type="text" name="email_address[]" class="form-control form-control-sm"
+                           placeholder="メールアドレス" value="{{ em.address if em is mapping else em.email }}">
+                </div>
+                <div class="col-4">
+                    <select name="email_type[]" class="form-select form-select-sm">
+                        {% set etype = em.type if em is mapping else em.email_type %}
+                        <option value="company" {{ 'selected' if etype == 'company' }}>会社</option>
+                        <option value="personal" {{ 'selected' if etype == 'personal' }}>個人</option>
+                    </select>
+                </div>
+                <div class="col-1">
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('.email-row').remove()">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="row g-2 mb-2 email-row">
+                <div class="col-7">
+                    <input type="text" name="email_address[]" class="form-control form-control-sm" placeholder="メールアドレス">
+                </div>
+                <div class="col-4">
+                    <select name="email_type[]" class="form-select form-select-sm">
+                        <option value="company">会社</option>
+                        <option value="personal">個人</option>
+                    </select>
+                </div>
+                <div class="col-1">
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('.email-row').remove()">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 資格・肩書き -->
+<div class="card mb-3">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-award me-1"></i>資格・肩書き</span>
+        <button type="button" class="btn btn-outline-dark btn-sm" onclick="addQualification()">
+            <i class="bi bi-plus"></i>追加
+        </button>
+    </div>
+    <div class="card-body" id="qualifications-container">
+        {% set quals = form_data.qualifications if form_data else [] %}
+        {% if card and not form_data %}
+            {% set quals = card.qualifications %}
+        {% endif %}
+        {% if quals %}
+            {% for q in quals %}
+            <div class="d-flex gap-2 mb-2 qual-row">
+                <input type="text" name="qualification[]" class="form-control form-control-sm"
+                       value="{{ q if q is string else q.qualification }}">
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('.qual-row').remove()">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+</div>
+
+<!-- 住所 -->
+<div class="card mb-3">
+    <div class="card-header py-2"><i class="bi bi-geo-alt me-1"></i>住所</div>
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-12 col-md-3">
+                <label class="form-label small">郵便番号</label>
+                <input type="text" name="zip_code" class="form-control"
+                       value="{{ form_data.zip_code if form_data else (card.zip_code or '') }}">
+            </div>
+            <div class="col-12 col-md-5">
+                <label class="form-label small">住所</label>
+                <input type="text" name="address" class="form-control"
+                       value="{{ form_data.address if form_data else (card.address or '') }}">
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label small">建物名</label>
+                <input type="text" name="building" class="form-control"
+                       value="{{ form_data.building if form_data else (card.building or '') }}">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Web・SNS -->
+<div class="card mb-3">
+    <div class="card-header py-2"><i class="bi bi-globe me-1"></i>Web・SNS</div>
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-12 col-md-6">
+                <label class="form-label small">Webサイト</label>
+                <input type="text" name="website" class="form-control"
+                       value="{{ form_data.website if form_data else (card.website or '') }}">
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small">SNS情報</label>
+                <input type="text" name="sns_info" class="form-control"
+                       value="{{ form_data.sns_info if form_data else (card.sns_info or '') }}">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 裏面情報 -->
+<div class="card mb-3">
+    <div class="card-header py-2"><i class="bi bi-card-text me-1"></i>裏面情報</div>
+    <div class="card-body">
+        <div class="mb-2">
+            <label class="form-label small">事業内容メモ</label>
+            <textarea name="back_business_memo" class="form-control" rows="2">{{ form_data.back_business_memo if form_data else (card.back_business_memo or '') }}</textarea>
+        </div>
+        <div>
+            <label class="form-label small">拠点情報メモ</label>
+            <textarea name="back_branch_memo" class="form-control" rows="2">{{ form_data.back_branch_memo if form_data else (card.back_branch_memo or '') }}</textarea>
+        </div>
+    </div>
+</div>
+
+<!-- 公開設定・メモ -->
+<div class="card mb-3">
+    <div class="card-header py-2"><i class="bi bi-gear me-1"></i>設定</div>
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-12 col-md-4">
+                <label class="form-label small">公開設定</label>
+                <select name="visibility" class="form-select">
+                    {% set vis = visibility if visibility is defined else (card.visibility if card else 'shared') %}
+                    <option value="shared" {{ 'selected' if vis == 'shared' }}>社内共有</option>
+                    <option value="private" {{ 'selected' if vis == 'private' }}>自分のみ</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-8">
+                <label class="form-label small">メモ</label>
+                <textarea name="memo" class="form-control" rows="2">{{ card.memo or '' if card else '' }}</textarea>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function addPhone() {
+    const html = `<div class="row g-2 mb-2 phone-row">
+        <div class="col-7"><input type="text" name="phone_number[]" class="form-control form-control-sm" placeholder="電話番号"></div>
+        <div class="col-4"><select name="phone_type[]" class="form-select form-select-sm">
+            <option value="main">代表</option><option value="direct">直通</option>
+            <option value="mobile">携帯</option><option value="fax">FAX</option>
+        </select></div>
+        <div class="col-1"><button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('.phone-row').remove()"><i class="bi bi-x"></i></button></div>
+    </div>`;
+    document.getElementById('phones-container').insertAdjacentHTML('beforeend', html);
+}
+
+function addEmail() {
+    const html = `<div class="row g-2 mb-2 email-row">
+        <div class="col-7"><input type="text" name="email_address[]" class="form-control form-control-sm" placeholder="メールアドレス"></div>
+        <div class="col-4"><select name="email_type[]" class="form-select form-select-sm">
+            <option value="company">会社</option><option value="personal">個人</option>
+        </select></div>
+        <div class="col-1"><button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('.email-row').remove()"><i class="bi bi-x"></i></button></div>
+    </div>`;
+    document.getElementById('emails-container').insertAdjacentHTML('beforeend', html);
+}
+
+function addQualification() {
+    const html = `<div class="d-flex gap-2 mb-2 qual-row">
+        <input type="text" name="qualification[]" class="form-control form-control-sm">
+        <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('.qual-row').remove()"><i class="bi bi-x"></i></button>
+    </div>`;
+    document.getElementById('qualifications-container').insertAdjacentHTML('beforeend', html);
+}
+</script>

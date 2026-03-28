@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}{{ company.name_ja }} - 名刺管理{% endblock %}
+
+{% block content %}
+<h4 class="mb-1">{{ company.name_ja }}</h4>
+{% if company.name_en %}
+<p class="text-muted small">{{ company.name_en }}</p>
+{% endif %}
+
+<p class="text-muted small">{{ cards|length }}件の名刺</p>
+
+{% if cards %}
+<div class="list-group mb-3">
+    {% for card in cards %}
+    <a href="{{ url_for('cards.show_card', card_id=card.id) }}"
+       class="list-group-item list-group-item-action d-flex align-items-center py-2">
+        <div class="rounded-circle bg-dark text-white d-flex align-items-center justify-content-center flex-shrink-0 me-3"
+             style="width: 40px; height: 40px; font-size: 0.9rem;">
+            {{ (card.name_kanji or '?')[0] }}
+        </div>
+        <div>
+            <div class="fw-bold">{{ card.name_kanji or '(氏名なし)' }}</div>
+            <div class="text-muted small">{{ card.position or '' }}</div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-muted">この会社の名刺はありません。</p>
+{% endif %}
+
+<a href="{{ url_for('companies.index') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>会社一覧に戻る
+</a>
+{% endblock %}

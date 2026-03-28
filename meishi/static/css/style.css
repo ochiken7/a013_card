@@ -1,0 +1,27 @@
+/* PC版: サイドバー固定 */
+@media (min-width: 768px) {
+    #sidebar {
+        width: 200px;
+        position: fixed;
+        top: 56px;
+        bottom: 0;
+        z-index: 100;
+    }
+
+    .main-content {
+        margin-left: 200px;
+        padding-top: 56px;
+    }
+}
+
+/* スマホ版 */
+@media (max-width: 767.98px) {
+    .main-content {
+        padding-top: 56px;
+    }
+}
+
+/* サイドバーのナビリンク hover */
+#sidebar .nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}

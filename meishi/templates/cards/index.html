@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}名刺一覧 - 名刺管理{% endblock %}
+
+{% block content %}
+<!-- 検索バー -->
+<div class="row mb-3">
+    <div class="col">
+        <form method="get" class="d-flex gap-2">
+            <input type="text" name="q" class="form-control" placeholder="名前・会社名・電話番号で検索"
+                   value="{{ query }}">
+            <input type="hidden" name="filter" value="{{ filter_type }}">
+            <button type="submit" class="btn btn-dark flex-shrink-0">
+                <i class="bi bi-search"></i>
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- フィルタータブ -->
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link {{ 'active' if filter_type == 'all' }}"
+           href="{{ url_for('cards.index', q=query, filter='all') }}">すべて</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {{ 'active' if filter_type == 'shared' }}"
+           href="{{ url_for('cards.index', q=query, filter='shared') }}">社内共有</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {{ 'active' if filter_type == 'mine' }}"
+           href="{{ url_for('cards.index', q=query, filter='mine') }}">自分のみ</a>
+    </li>
+</ul>
+
+<p class="text-muted small mb-3">{{ total_count }}件</p>
+
+<!-- 名刺リスト（アイウエオ順セクション） -->
+{% if sections %}
+    {% for section_name, cards in sections.items() %}
+    <div class="mb-3">
+        <h6 class="text-muted border-bottom pb-1">{{ section_name }}</h6>
+        <div class="list-group list-group-flush">
+            {% for card in cards %}
+            <a href="{{ url_for('cards.show_card', card_id=card.id) }}"
+               class="list-group-item list-group-item-action d-flex align-items-center py-2">
+                <!-- イニシャルアバター -->
+                <div class="rounded-circle bg-dark text-white d-flex align-items-center justify-content-center flex-shrink-0 me-3"
+                     style="width: 40px; height: 40px; font-size: 0.9rem;">
+                    {{ (card.name_kanji or '?')[0] }}
+                </div>
+                <div class="flex-grow-1 min-width-0">
+                    <div class="fw-bold text-truncate">{{ card.name_kanji or '(氏名なし)' }}</div>
+                    <div class="text-muted small text-truncate">
+                        {% if card.company %}{{ card.company.name_ja }}{% endif %}
+                        {% if card.position %} / {{ card.position }}{% endif %}
+                    </div>
+                </div>
+                {% if card.visibility == 'shared' %}
+                <span class="badge bg-info ms-2">共有</span>
+                {% endif %}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="text-center text-muted py-5">
+        <i class="bi bi-person-vcard" style="font-size: 3rem;"></i>
+        <p class="mt-2">名刺がまだ登録されていません。</p>
+    </div>
+{% endif %}
+
+<!-- FAB（スマホ用 新規登録ボタン） -->
+<a href="{{ url_for('cards.new_card') }}"
+   class="btn btn-dark rounded-circle shadow position-fixed d-md-none"
+   style="bottom: 24px; right: 24px; width: 56px; height: 56px; font-size: 1.5rem; line-height: 56px; text-align: center; z-index: 1050;">
+    <i class="bi bi-plus"></i>
+</a>
+
+<!-- PC用 新規登録ボタン -->
+<div class="d-none d-md-block mb-3">
+    <a href="{{ url_for('cards.new_card') }}" class="btn btn-dark">
+        <i class="bi bi-plus-circle me-1"></i>名刺を登録
+    </a>
+</div>
+{% endblock %}

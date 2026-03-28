@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}名刺編集 - 名刺管理{% endblock %}
+
+{% block content %}
+<h4 class="mb-3"><i class="bi bi-pencil me-1"></i>名刺編集</h4>
+
+<form method="post" action="{{ url_for('cards.update_card', card_id=card.id) }}">
+    {% set form_data = None %}
+    {% include "cards/_card_form.html" %}
+
+    <div class="d-grid gap-2 mb-4">
+        <button type="submit" class="btn btn-dark btn-lg">
+            <i class="bi bi-check-lg me-1"></i>更新する
+        </button>
+        <a href="{{ url_for('cards.show_card', card_id=card.id) }}" class="btn btn-outline-secondary">
+            キャンセル
+        </a>
+    </div>
+</form>
+{% endblock %}

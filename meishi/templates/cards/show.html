@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+
+{% block title %}{{ card.name_kanji or '名刺詳細' }} - 名刺管理{% endblock %}
+
+{% block content %}
+<!-- ヘッダー -->
+<div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+        <h4 class="mb-1">{{ card.name_kanji or '(氏名なし)' }}</h4>
+        {% if card.name_kana %}
+        <div class="text-muted small">{{ card.name_kana }}</div>
+        {% endif %}
+    </div>
+    <div class="d-flex gap-1">
+        <a href="{{ url_for('cards.edit_card', card_id=card.id) }}" class="btn btn-outline-dark btn-sm">
+            <i class="bi bi-pencil"></i> 編集
+        </a>
+        <form method="post" action="{{ url_for('cards.delete_card', card_id=card.id) }}"
+              onsubmit="return confirm('この名刺を削除しますか？')">
+            <button type="submit" class="btn btn-outline-danger btn-sm">
+                <i class="bi bi-trash"></i>
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- 画像 -->
+{% if image_urls %}
+<div class="row mb-3">
+    {% for img in image_urls %}
+    <div class="col-6 col-md-4">
+        <div class="card">
+            <div class="card-header small py-1">{{ '表面' if img.side == 'front' else '裏面' }}</div>
+            {% if img.url %}
+            <img src="{{ img.url }}" class="card-img-bottom img-fluid"
+                 style="cursor: pointer; max-height: 250px; object-fit: contain;"
+                 onclick="window.open(this.src, '_blank')"
+                 alt="名刺{{ '表面' if img.side == 'front' else '裏面' }}">
+            {% else %}
+            <div class="card-body text-muted small">画像を読み込めません</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- 会社・所属 -->
+{% if card.company or card.department or card.position %}
+<div class="card mb-3">
+    <div class="card-body">
+        {% if card.company %}
+        <div class="fw-bold"><i class="bi bi-building me-1"></i>{{ card.company.name_ja }}
+            {% if card.company.name_en %}<span class="text-muted small ms-1">{{ card.company.name_en }}</span>{% endif %}
+        </div>
+        {% endif %}
+        {% if card.department or card.position %}
+        <div class="text-muted">
+            {{ card.department or '' }}{% if card.department and card.position %} / {% endif %}{{ card.position or '' }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- 連絡先 -->
+{% if card.phones or card.emails %}
+<div class="card mb-3">
+    <div class="card-header py-2"><i class="bi bi-telephone me-1"></i>連絡先</div>
+    <ul class="list-group list-group-flush">
+        {% for phone in card.phones %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <a href="tel:{{ phone.phone_number }}" class="text-decoration-none">
+                <i class="bi bi-telephone me-1"></i>{{ phone.phone_number }}
+            </a>
+            <span class="badge bg-secondary">
+                {{ {'main':'代表','direct':'直通','mobile':'携帯','fax':'FAX'}.get(phone.phone_type, phone.phone_type) }}
+            </span>
+        </li>
+        {% endfor %}
+        {% for em in card.emails %}
+        <li class="list-group-item">
+            <a href="mailto:{{ em.email }}" class="text-decoration-none">
+                <i class="bi bi-envelope me-1"></i>{{ em.email }}
+            </a>
+            <span class="badge bg-secondary ms-1">
+                {{ '会社' if em.email_type == 'company' else '個人' }}
+            </span>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<!-- 住所 -->
+{% if card.zip_code or card.address %}
+<div class="card mb-3">
+    <div class="card-header py-2"><i class="bi bi-geo-alt me-1"></i>住所</div>
+    <div class="card-body">
+        {% if card.zip_code %}<div>〒{{ card.zip_code }}</div>{% endif %}
+        <div>{{ card.address or '' }} {{ card.building or '' }}</div>
+    </div>
+</div>
+{% endif %}
+
+<!-- 資格 -->
+{% if card.qualifications %}
+<div class="card mb-3">
+    <div class="card-header py-2"><i class="bi bi-award me-1"></i>資格・肩書き</div>
+    <div class="card-body">
+        {% for q in card.qualifications %}
+        <span class="badge bg-dark me-1 mb-1">{{ q.qualification }}</span>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Web・SNS -->
+{% if card.website or card.sns_info %}
+<div class="card mb-3">
+    <div class="card-header py-2"><i class="bi bi-globe me-1"></i>Web・SNS</div>
+    <div class="card-body">
+        {% if card.website %}
+        <div><a href="{{ card.website }}" target="_blank" rel="noopener">{{ card.website }}</a></div>
+        {% endif %}
+        {% if card.sns_info %}
+        <div class="text-muted">{{ card.sns_info }}</div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- 裏面情報 -->
+{% if card.back_business_memo or card.back_branch_memo %}
+<details class="card mb-3">
+    <summary class="card-header py-2" style="cursor: pointer;">
+        <i class="bi bi-card-text me-1"></i>裏面情報
+    </summary>
+    <div class="card-body">
+        {% if card.back_business_memo %}
+        <div class="mb-2">
+            <div class="small text-muted">事業内容</div>
+            <div style="white-space: pre-wrap;">{{ card.back_business_memo }}</div>
+        </div>
+        {% endif %}
+        {% if card.back_branch_memo %}
+        <div>
+            <div class="small text-muted">拠点情報</div>
+            <div style="white-space: pre-wrap;">{{ card.back_branch_memo }}</div>
+        </div>
+        {% endif %}
+    </div>
+</details>
+{% endif %}
+
+<!-- メモ -->
+{% if card.memo %}
+<div class="card mb-3">
+    <div class="card-header py-2"><i class="bi bi-sticky me-1"></i>メモ</div>
+    <div class="card-body" style="white-space: pre-wrap;">{{ card.memo }}</div>
+</div>
+{% endif %}
+
+<!-- タグ -->
+<div class="card mb-3">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-tags me-1"></i>タグ</span>
+    </div>
+    <div class="card-body">
+        <div id="tag-list" class="mb-2">
+            {% for tag in card.tags %}
+            <span class="badge bg-dark me-1 mb-1">
+                {{ tag.name }}
+                <a href="#" class="text-white text-decoration-none ms-1"
+                   onclick="removeTag({{ card.id }}, {{ tag.id }}); return false;"
+                   title="削除">&times;</a>
+            </span>
+            {% endfor %}
+            <span id="no-tags" class="text-muted small" {% if card.tags %}style="display:none;"{% endif %}>タグなし</span>
+        </div>
+        <form class="d-flex gap-2" onsubmit="addTag({{ card.id }}); return false;">
+            <input type="text" id="new-tag-input" class="form-control form-control-sm"
+                   placeholder="タグ名を入力..." autocomplete="off">
+            <button type="submit" class="btn btn-outline-dark btn-sm flex-shrink-0">
+                <i class="bi bi-plus"></i>追加
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- フッター情報 -->
+<div class="text-muted small mb-4">
+    <i class="bi bi-clock me-1"></i>登録: {{ card.created_at.strftime('%Y/%m/%d %H:%M') }}
+    {% if card.registrant %} by {{ card.registrant.display_name }}{% endif %}
+    <span class="badge {{ 'bg-info' if card.visibility == 'shared' else 'bg-secondary' }} ms-1">
+        {{ '共有' if card.visibility == 'shared' else '非公開' }}
+    </span>
+</div>
+
+<a href="{{ url_for('cards.index') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>一覧に戻る
+</a>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function addTag(cardId) {
+    const input = document.getElementById('new-tag-input');
+    const name = input.value.trim();
+    if (!name) return;
+
+    fetch(`/cards/${cardId}/tags`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: name})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-dark me-1 mb-1';
+            badge.innerHTML = `${data.name} <a href="#" class="text-white text-decoration-none ms-1" onclick="removeTag(${cardId}, ${data.id}); return false;" title="削除">&times;</a>`;
+            document.getElementById('tag-list').insertBefore(badge, document.getElementById('no-tags'));
+            document.getElementById('no-tags').style.display = 'none';
+            input.value = '';
+        } else {
+            alert(data.error || 'エラーが発生しました');
+        }
+    });
+}
+
+function removeTag(cardId, tagId) {
+    if (!confirm('このタグを削除しますか？')) return;
+    fetch(`/cards/${cardId}/tags/${tagId}`, {method: 'DELETE'})
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            location.reload();
+        }
+    });
+}
+</script>
+{% endblock %}

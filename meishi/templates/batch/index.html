@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}バッチ処理 - 名刺管理{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-layers me-2"></i>バッチ処理</h4>
+</div>
+
+{# === アップロードフォーム === #}
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-cloud-upload me-1"></i>一括アップロード
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('batch.upload') }}" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label for="images" class="form-label">名刺画像を選択（複数可）</label>
+                <input type="file" class="form-control" id="images" name="images"
+                       accept="image/*" multiple required>
+                <div class="form-text">JPEG・PNG形式の名刺画像をまとめて選択できます。</div>
+            </div>
+            <div id="file-preview" class="mb-3 d-none">
+                <small class="text-muted">選択中: <span id="file-count">0</span> 枚</small>
+            </div>
+            <button type="submit" class="btn btn-primary" id="upload-btn">
+                <i class="bi bi-upload me-1"></i>アップロード
+            </button>
+        </form>
+    </div>
+</div>
+
+{# === バッチジョブ詳細（detail_jobがある場合） === #}
+{% if detail_job %}
+<div class="card mb-4 border-primary">
+    <div class="card-header bg-primary text-white">
+        <i class="bi bi-info-circle me-1"></i>バッチジョブ #{{ detail_job.id }} の詳細
+    </div>
+    <div class="card-body">
+        <div class="row mb-3">
+            <div class="col-sm-4">
+                <strong>ステータス:</strong>
+                {% if detail_job.status == 'pending' %}
+                    <span class="badge bg-warning text-dark">未処理</span>
+                {% elif detail_job.status == 'processing' %}
+                    <span class="badge bg-info">処理中</span>
+                {% elif detail_job.status == 'completed' %}
+                    <span class="badge bg-success">完了</span>
+                {% else %}
+                    <span class="badge bg-danger">失敗</span>
+                {% endif %}
+            </div>
+            <div class="col-sm-4">
+                <strong>処理状況:</strong> {{ detail_job.processed_count }} / {{ detail_job.total_count }} 枚
+            </div>
+            <div class="col-sm-4">
+                <strong>作成日時:</strong> {{ detail_job.created_at.strftime('%Y/%m/%d %H:%M') }}
+            </div>
+        </div>
+
+        <h6>アイテム一覧</h6>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 40px;">#</th>
+                        <th>ファイル名</th>
+                        <th style="width: 100px;">ステータス</th>
+                        <th>名刺リンク</th>
+                        <th>エラー</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in detail_job.items %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ item.original_filename or '-' }}</td>
+                        <td>
+                            {% if item.status == 'pending' %}
+                                <span class="badge bg-warning text-dark">未処理</span>
+                            {% elif item.status == 'processing' %}
+                                <span class="badge bg-info">処理中</span>
+                            {% elif item.status == 'completed' %}
+                                <span class="badge bg-success">完了</span>
+                            {% else %}
+                                <span class="badge bg-danger">失敗</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.card_id %}
+                                <a href="{{ url_for('cards.show_card', card_id=item.card_id) }}">
+                                    名刺 #{{ item.card_id }}
+                                </a>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td class="text-danger small">{{ item.error_message or '' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <a href="{{ url_for('batch.index') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>一覧に戻る
+        </a>
+    </div>
+</div>
+{% endif %}
+
+{# === バッチジョブ一覧 === #}
+{% if not detail_job %}
+<div class="card">
+    <div class="card-header">
+        <i class="bi bi-list-task me-1"></i>バッチジョブ一覧
+    </div>
+    <div class="card-body p-0">
+        {% if jobs %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 60px;">ID</th>
+                        <th>作成日時</th>
+                        <th>枚数</th>
+                        <th>ステータス</th>
+                        <th style="width: 180px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in jobs %}
+                    <tr>
+                        <td>{{ job.id }}</td>
+                        <td>{{ job.created_at.strftime('%Y/%m/%d %H:%M') }}</td>
+                        <td>{{ job.processed_count }} / {{ job.total_count }}</td>
+                        <td>
+                            {% if job.status == 'pending' %}
+                                <span class="badge bg-warning text-dark">未処理</span>
+                            {% elif job.status == 'processing' %}
+                                <span class="badge bg-info">処理中</span>
+                            {% elif job.status == 'completed' %}
+                                <span class="badge bg-success">完了</span>
+                            {% else %}
+                                <span class="badge bg-danger">失敗</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if job.status == 'pending' %}
+                                <form method="POST" action="{{ url_for('batch.process', job_id=job.id) }}"
+                                      class="d-inline" onsubmit="return confirmProcess(this);">
+                                    <button type="submit" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-play-fill me-1"></i>OCR実行
+                                    </button>
+                                </form>
+                            {% endif %}
+                            <a href="{{ url_for('batch.detail', job_id=job.id) }}" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-eye me-1"></i>詳細
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+            <p class="mt-2">バッチジョブはまだありません。</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 選択ファイル数の表示
+document.getElementById('images').addEventListener('change', function() {
+    const count = this.files.length;
+    const preview = document.getElementById('file-preview');
+    const countSpan = document.getElementById('file-count');
+    if (count > 0) {
+        preview.classList.remove('d-none');
+        countSpan.textContent = count;
+    } else {
+        preview.classList.add('d-none');
+    }
+});
+
+// OCR実行確認
+function confirmProcess(form) {
+    return confirm('OCR処理を開始しますか？\n処理中はしばらくお待ちください。');
+}
+</script>
+{% endblock %}
