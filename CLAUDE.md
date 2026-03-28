@@ -289,87 +289,49 @@ a013_card/
 | 項目 | 値 |
 |------|-----|
 | SSHユーザー | vpsuser |
-| SSH認証 | .pemファイル / sudoパスワードなし |
+| SSH鍵 | D:\VPS\ssh-knd.pem |
 | 配置先 | /var/www/vpsk/a013/ |
 | ドメイン | a013.vpsk.net |
-| Nginx | サブドメイン→Gunicornプロキシ |
-| ポート | 使用中のポートを避けて設定 |
+| Gunicornポート | 8013 |
+| systemdサービス | a013.service |
+| DB | PostgreSQL 17（DB名: meishi、Unixソケットpeer認証 `postgresql:///meishi`） |
+| SSL | Let's Encrypt（自動更新あり） |
+| GitHub | https://github.com/ochiken7/a013_card (public) |
 
 ### デプロイ手順
 ```bash
 # ローカル
 git add -A && git commit -m "メッセージ" && git push
 
-# VPS
+# VPS（SSHで接続して実行）
 cd /var/www/vpsk/a013
 git pull
-pip install -r requirements.txt
-flask db upgrade
+source venv/bin/activate
+pip install -r requirements.txt   # 依存関係変更時のみ
+flask db upgrade                   # マイグレーション時のみ
 sudo systemctl restart a013
 ```
 
-### Nginx設定（参考）
-```nginx
-server {
-    server_name a013.vpsk.net;
-    location / {
-        proxy_pass http://127.0.0.1:PORT;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        client_max_body_size 20M;
-    }
-}
-```
-
-### systemd設定（参考）
-```ini
-[Unit]
-Description=a013 meishi app
-After=network.target
-
-[Service]
-User=vpsuser
-WorkingDirectory=/var/www/vpsk/a013
-Environment="PATH=/var/www/vpsk/a013/venv/bin"
-EnvironmentFile=/var/www/vpsk/a013/.env
-ExecStart=/var/www/vpsk/a013/venv/bin/gunicorn wsgi:app --bind 127.0.0.1:PORT --workers 2
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
+### SSH接続
+```bash
+ssh -i "D:\VPS\ssh-knd.pem" vpsuser@a013.vpsk.net
 ```
 
 ---
 
-## 実装順序
+## 実装状況（2026-03-29 全Phase完了・デプロイ済み）
 
-### Phase 1: 基盤（まずここから）
-1. プロジェクト初期化（requirements.txt, config.py, create_app）
-2. DBモデル定義（SQLAlchemy）+ マイグレーション
-3. 認証（Flask-Login: ログイン/ログアウト）
-4. 基本レイアウト（base.html + Bootstrap 5 + レスポンシブ）
+### Phase 1: 基盤 ✅
+### Phase 2: コア機能 ✅
+### Phase 3: 拡張機能 ✅
+### Phase 4: 仕上げ・デプロイ ✅
 
-### Phase 2: コア機能
-5. 名刺一覧（検索・ソート・フィルター・アイウエオ順）
-6. R2ユーティリティ（services/r2.py）
-7. 名刺登録 + 画像アップロード→R2保存
-8. OCR処理（services/ocr.py + services/structurer.py）
-9. OCR確認画面 + DB保存
-10. 名刺詳細・編集
-
-### Phase 3: 拡張機能
-11. 会社グルーピング（統合・解除）
-12. タグ機能
-13. バッチ処理（PC向け一括OCR）
-14. CSVインポート/エクスポート
-15. ユーザー管理（管理者画面）
-
-### Phase 4: 仕上げ
-16. PWA設定（manifest.json + Service Worker）
-17. Nginx + Gunicorn + systemd 設定
-18. 本番デプロイ・動作確認
+### 今後のカスタマイズ候補
+- PWAアイコン画像（icon-192.png, icon-512.png）の作成
+- 名刺一覧でのタグフィルター機能
+- バッチ処理の非同期化（現在は同期で処理時間がかかる）
+- 検索インデックスの最適化（PostgreSQL側）
+- settings Blueprint に追加機能
 
 ---
 
