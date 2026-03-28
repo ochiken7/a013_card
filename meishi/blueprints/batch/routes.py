@@ -127,8 +127,8 @@ def process(job_id):
 
             # 会社名マッチング
             company_name = structured.get("company_name_ja", "")
-            company_en = structured.get("company_name_en")
-            company_id = match_or_create_company(company_name, company_en) if company_name else None
+            company_kana = structured.get("company_name_kana")
+            company_id = match_or_create_company(company_name, company_kana) if company_name else None
 
             # 名刺レコード作成
             card = Card(

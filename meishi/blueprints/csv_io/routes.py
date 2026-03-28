@@ -40,7 +40,7 @@ def export():
 
     # ヘッダー行
     writer.writerow([
-        "id", "company_name_ja", "company_name_en",
+        "id", "company_name_ja", "company_name_kana",
         "department", "position",
         "name_kanji", "name_kana", "name_romaji",
         "phone_numbers", "email_addresses", "qualifications",
@@ -58,7 +58,7 @@ def export():
         writer.writerow([
             card.id,
             card.company.name_ja if card.company else "",
-            card.company.name_en if card.company else "",
+            card.company.name_kana if card.company else "",
             card.department or "",
             card.position or "",
             card.name_kanji or "",
@@ -122,7 +122,7 @@ def import_csv():
             # CSV列の対応（idは無視して新規作成）
             (
                 _id,
-                company_name_ja, company_name_en,
+                company_name_ja, company_name_kana,
                 department, position,
                 name_kanji, name_kana, name_romaji,
                 phone_numbers, email_addresses, qualifications,
@@ -135,7 +135,7 @@ def import_csv():
             # 会社マッチング
             company_id = match_or_create_company(
                 company_name_ja.strip() if company_name_ja.strip() else None,
-                company_name_en.strip() if company_name_en.strip() else None,
+                company_name_kana.strip() if company_name_kana.strip() else None,
             )
 
             # 名刺レコード作成

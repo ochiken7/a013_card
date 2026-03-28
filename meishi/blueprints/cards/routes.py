@@ -6,6 +6,7 @@ from flask import (
     session, abort, jsonify,
 )
 from flask_login import login_required, current_user
+from collections import Counter
 from sqlalchemy import or_
 
 from meishi import db
@@ -68,6 +69,18 @@ def index():
 
     cards = cards_query.all()
 
+    # 重複検出（同一 company_id + name_kanji）
+    dup_counter = Counter(
+        (card.company_id, card.name_kanji)
+        for card in cards
+        if card.company_id and card.name_kanji
+    )
+    duplicate_ids = set()
+    for card in cards:
+        key = (card.company_id, card.name_kanji)
+        if card.company_id and card.name_kanji and dup_counter[key] > 1:
+            duplicate_ids.add(card.id)
+
     # アイウエオ順セクション分け
     sections = {}
     for card in cards:
@@ -78,9 +91,14 @@ def index():
             section = "その他"
         sections.setdefault(section, []).append(card)
 
+    # インデックスボタン用: 存在するセクション一覧
+    all_sections = list(sections.keys())
+
     return render_template(
         "cards/index.html",
         sections=sections,
+        all_sections=all_sections,
+        duplicate_ids=duplicate_ids,
         query=query,
         filter_type=filter_type,
         total_count=len(cards),
@@ -88,7 +106,7 @@ def index():
 
 
 def _get_kana_section(char):
-    """カナ文字からアイウエオ順のセクション名を返す"""
+    """カナ文字・アルファベットからセクション名を返す"""
     kana_groups = [
         ("ア", "アイウエオ"),
         ("カ", "カキクケコガギグゲゴ"),
@@ -104,6 +122,10 @@ def _get_kana_section(char):
     for section_name, chars in kana_groups:
         if char in chars:
             return section_name
+    # A-Z対応
+    upper = char.upper()
+    if "A" <= upper <= "Z":
+        return upper
     return "その他"
 
 
@@ -128,13 +150,16 @@ def create_card():
         flash("表面の画像を選択してください。", "danger")
         return redirect(url_for("cards.new_card"))
 
+    front_rotation = int(request.form.get("front_rotation", 0))
+    back_rotation = int(request.form.get("back_rotation", 0))
+
     card_image_ids = []
     front_text = ""
     back_text = ""
 
     try:
         # === 表面処理 ===
-        front_bytes = preprocess_image(front_file.read())
+        front_bytes = preprocess_image(front_file.read(), rotation=front_rotation)
         front_key = generate_object_key(current_user.id, "front", front_file.filename)
         upload_image(front_bytes, front_key)
 
@@ -158,7 +183,7 @@ def create_card():
 
         # === 裏面処理（あれば） ===
         if back_file and back_file.filename:
-            back_bytes = preprocess_image(back_file.read())
+            back_bytes = preprocess_image(back_file.read(), rotation=back_rotation)
             back_key = generate_object_key(current_user.id, "back", back_file.filename)
             upload_image(back_bytes, back_key)
 
@@ -251,8 +276,8 @@ def save_card():
 
     # 会社マッチング
     company_name_ja = request.form.get("company_name_ja", "").strip()
-    company_name_en = request.form.get("company_name_en", "").strip()
-    company_id = match_or_create_company(company_name_ja, company_name_en or None)
+    company_name_kana = request.form.get("company_name_kana", "").strip()
+    company_id = match_or_create_company(company_name_ja, company_name_kana or None)
 
     # カード作成
     card = Card(
@@ -377,8 +402,8 @@ def update_card(card_id):
 
     # 会社マッチング
     company_name_ja = request.form.get("company_name_ja", "").strip()
-    company_name_en = request.form.get("company_name_en", "").strip()
-    card.company_id = match_or_create_company(company_name_ja, company_name_en or None)
+    company_name_kana = request.form.get("company_name_kana", "").strip()
+    card.company_id = match_or_create_company(company_name_ja, company_name_kana or None)
 
     # 基本情報更新
     card.department = request.form.get("department", "").strip() or None

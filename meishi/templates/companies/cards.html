@@ -4,8 +4,8 @@
 
 {% block content %}
 <h4 class="mb-1">{{ company.name_ja }}</h4>
-{% if company.name_en %}
-<p class="text-muted small">{{ company.name_en }}</p>
+{% if company.name_kana %}
+<p class="text-muted small">{{ company.name_kana }}</p>
 {% endif %}
 
 <p class="text-muted small">{{ cards|length }}件の名刺</p>

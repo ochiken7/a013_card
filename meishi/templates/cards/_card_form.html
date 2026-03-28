@@ -32,9 +32,9 @@
                        value="{{ form_data.company_name_ja if form_data else (card.company.name_ja if card and card.company else '') }}">
             </div>
             <div class="col-12 col-md-6">
-                <label class="form-label small">会社名（英語）</label>
-                <input type="text" name="company_name_en" class="form-control"
-                       value="{{ form_data.company_name_en if form_data else (card.company.name_en if card and card.company else '') }}">
+                <label class="form-label small">会社名（フリガナ）</label>
+                <input type="text" name="company_name_kana" class="form-control"
+                       value="{{ form_data.company_name_kana if form_data else (card.company.name_kana if card and card.company else '') }}">
             </div>
             <div class="col-12 col-md-6">
                 <label class="form-label small">部署名</label>

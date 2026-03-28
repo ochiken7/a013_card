@@ -20,7 +20,7 @@ def normalize_company_name(name):
     return name
 
 
-def match_or_create_company(company_name_ja, company_name_en=None):
+def match_or_create_company(company_name_ja, company_name_kana=None):
     """会社名でDBを検索し、一致すればそのIDを返す。なければ新規作成。"""
     if not company_name_ja:
         return None
@@ -37,7 +37,7 @@ def match_or_create_company(company_name_ja, company_name_en=None):
             return company.id
 
     # 新規作成
-    company = Company(name_ja=company_name_ja, name_en=company_name_en)
+    company = Company(name_ja=company_name_ja, name_kana=company_name_kana)
     db.session.add(company)
     db.session.flush()
     return company.id

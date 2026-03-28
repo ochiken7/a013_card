@@ -35,10 +35,33 @@
 
 <p class="text-muted small mb-3">{{ total_count }}件</p>
 
+<!-- インデックスボタン -->
+{% if sections %}
+<div class="d-flex flex-wrap gap-1 mb-3">
+    {% set kana_labels = ['ア','カ','サ','タ','ナ','ハ','マ','ヤ','ラ','ワ'] %}
+    {% set alpha_labels = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' %}
+    {% for label in kana_labels %}
+        {% if label in all_sections %}
+        <a href="#section-{{ label }}" class="btn btn-outline-dark btn-sm">{{ label }}</a>
+        {% else %}
+        <span class="btn btn-outline-secondary btn-sm disabled">{{ label }}</span>
+        {% endif %}
+    {% endfor %}
+    {% for letter in alpha_labels %}
+        {% if letter in all_sections %}
+        <a href="#section-{{ letter }}" class="btn btn-outline-dark btn-sm">{{ letter }}</a>
+        {% endif %}
+    {% endfor %}
+    {% if 'その他' in all_sections %}
+    <a href="#section-other" class="btn btn-outline-dark btn-sm">他</a>
+    {% endif %}
+</div>
+{% endif %}
+
 <!-- 名刺リスト（アイウエオ順セクション） -->
 {% if sections %}
     {% for section_name, cards in sections.items() %}
-    <div class="mb-3">
+    <div class="mb-3" id="section-{{ section_name if section_name != 'その他' else 'other' }}">
         <h6 class="text-muted border-bottom pb-1">{{ section_name }}</h6>
         <div class="list-group list-group-flush">
             {% for card in cards %}
@@ -56,8 +79,11 @@
                         {% if card.position %} / {{ card.position }}{% endif %}
                     </div>
                 </div>
+                {% if card.id in duplicate_ids %}
+                <span class="badge bg-warning text-dark ms-1">重複</span>
+                {% endif %}
                 {% if card.visibility == 'shared' %}
-                <span class="badge bg-info ms-2">共有</span>
+                <span class="badge bg-info ms-1">共有</span>
                 {% endif %}
             </a>
             {% endfor %}
@@ -74,7 +100,7 @@
 <!-- FAB（スマホ用 新規登録ボタン） -->
 <a href="{{ url_for('cards.new_card') }}"
    class="btn btn-dark rounded-circle shadow position-fixed d-md-none"
-   style="bottom: 24px; right: 24px; width: 56px; height: 56px; font-size: 1.5rem; line-height: 56px; text-align: center; z-index: 1050;">
+   style="bottom: 24px; right: 24px; width: 56px; height: 56px; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; z-index: 1050;">
     <i class="bi bi-plus"></i>
 </a>
 

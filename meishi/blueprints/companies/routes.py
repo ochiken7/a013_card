@@ -9,25 +9,62 @@ from meishi.models.company import Company
 from meishi.models.card import Card
 
 
+def _get_company_section(company):
+    """会社のフリガナからセクション名を返す"""
+    kana = company.name_kana
+    if not kana:
+        return "その他"
+    char = kana[0]
+    kana_groups = [
+        ("ア", "アイウエオ"),
+        ("カ", "カキクケコガギグゲゴ"),
+        ("サ", "サシスセソザジズゼゾ"),
+        ("タ", "タチツテトダヂヅデド"),
+        ("ナ", "ナニヌネノ"),
+        ("ハ", "ハヒフヘホバビブベボパピプペポ"),
+        ("マ", "マミムメモ"),
+        ("ヤ", "ヤユヨ"),
+        ("ラ", "ラリルレロ"),
+        ("ワ", "ワヲン"),
+    ]
+    for section_name, chars in kana_groups:
+        if char in chars:
+            return section_name
+    upper = char.upper()
+    if "A" <= upper <= "Z":
+        return upper
+    return "その他"
+
+
 @companies_bp.route("/companies")
 @login_required
 def index():
-    """会社一覧（名刺件数付き）"""
+    """会社一覧（名刺件数付き・五十音セクション）"""
     # 有効な会社のみ（統合済み除外）+ 名刺件数
     companies = (
         db.session.query(Company, func.count(Card.id).label("card_count"))
         .outerjoin(Card, Card.company_id == Company.id)
         .filter(Company.merged_into_id.is_(None))
         .group_by(Company.id)
-        .order_by(Company.name_ja.asc())
+        .order_by(Company.name_kana.asc().nullslast(), Company.name_ja.asc())
         .all()
     )
+
+    # 五十音セクション分け
+    sections = {}
+    for company, count in companies:
+        section = _get_company_section(company)
+        sections.setdefault(section, []).append((company, count))
+
+    all_sections = list(sections.keys())
 
     # 統合済みの会社
     merged = Company.query.filter(Company.merged_into_id.isnot(None)).all()
 
     return render_template(
         "companies/index.html",
+        sections=sections,
+        all_sections=all_sections,
         companies=companies,
         merged=merged,
     )

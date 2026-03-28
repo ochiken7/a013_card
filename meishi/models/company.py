@@ -6,7 +6,7 @@ class Company(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name_ja = db.Column(db.String(255), nullable=False)
-    name_en = db.Column(db.String(255))
+    name_kana = db.Column(db.String(255))
     merged_into_id = db.Column(db.Integer, db.ForeignKey("companies.id", ondelete="SET NULL"))
     created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
     updated_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now(), onupdate=db.func.now())

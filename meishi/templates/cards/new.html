@@ -10,12 +10,33 @@
     <div class="mb-3">
         <label class="form-label fw-bold">表面の画像 <span class="text-danger">*</span></label>
         <div id="front-preview" class="mb-2" style="display:none;">
-            <img id="front-preview-img" class="img-fluid rounded border" style="max-height: 200px;">
+            <div class="text-center">
+                <img id="front-preview-img" class="img-fluid rounded border" style="max-height: 200px;">
+            </div>
+            <div class="d-flex justify-content-center gap-2 mt-1">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="rotateImage('front', -90)">
+                    <i class="bi bi-arrow-counterclockwise"></i> 左90°
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="rotateImage('front', 90)">
+                    <i class="bi bi-arrow-clockwise"></i> 右90°
+                </button>
+            </div>
+            <input type="hidden" name="front_rotation" id="front_rotation" value="0">
         </div>
-        <input type="file" name="front_image" id="front_image" class="form-control"
-               accept="image/*" capture="environment" required
-               onchange="previewImage(this, 'front-preview', 'front-preview-img')">
-        <div class="form-text">カメラで撮影、またはファイルを選択</div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-dark flex-fill" onclick="document.getElementById('front_camera').click()">
+                <i class="bi bi-camera me-1"></i>カメラで撮影
+            </button>
+            <button type="button" class="btn btn-outline-secondary flex-fill" onclick="document.getElementById('front_file').click()">
+                <i class="bi bi-image me-1"></i>写真を選択
+            </button>
+        </div>
+        <input type="file" name="front_image" id="front_camera" class="d-none"
+               accept="image/*" capture="environment"
+               onchange="previewImage(this, 'front-preview', 'front-preview-img', 'front')">
+        <input type="file" name="front_image" id="front_file" class="d-none"
+               accept="image/*"
+               onchange="previewImage(this, 'front-preview', 'front-preview-img', 'front')">
     </div>
 
     <!-- 裏面画像 -->
@@ -23,11 +44,33 @@
         <div id="back-section" style="display:none;">
             <label class="form-label fw-bold">裏面の画像</label>
             <div id="back-preview" class="mb-2" style="display:none;">
-                <img id="back-preview-img" class="img-fluid rounded border" style="max-height: 200px;">
+                <div class="text-center">
+                    <img id="back-preview-img" class="img-fluid rounded border" style="max-height: 200px;">
+                </div>
+                <div class="d-flex justify-content-center gap-2 mt-1">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="rotateImage('back', -90)">
+                        <i class="bi bi-arrow-counterclockwise"></i> 左90°
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="rotateImage('back', 90)">
+                        <i class="bi bi-arrow-clockwise"></i> 右90°
+                    </button>
+                </div>
+                <input type="hidden" name="back_rotation" id="back_rotation" value="0">
             </div>
-            <input type="file" name="back_image" id="back_image" class="form-control"
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-dark flex-fill" onclick="document.getElementById('back_camera').click()">
+                    <i class="bi bi-camera me-1"></i>カメラで撮影
+                </button>
+                <button type="button" class="btn btn-outline-secondary flex-fill" onclick="document.getElementById('back_file').click()">
+                    <i class="bi bi-image me-1"></i>写真を選択
+                </button>
+            </div>
+            <input type="file" name="back_image" id="back_camera" class="d-none"
                    accept="image/*" capture="environment"
-                   onchange="previewImage(this, 'back-preview', 'back-preview-img')">
+                   onchange="previewImage(this, 'back-preview', 'back-preview-img', 'back')">
+            <input type="file" name="back_image" id="back_file" class="d-none"
+                   accept="image/*"
+                   onchange="previewImage(this, 'back-preview', 'back-preview-img', 'back')">
         </div>
         <button type="button" id="add-back-btn" class="btn btn-outline-secondary btn-sm"
                 onclick="document.getElementById('back-section').style.display='block'; this.style.display='none';">
@@ -56,7 +99,10 @@
 
 {% block scripts %}
 <script>
-function previewImage(input, previewDivId, imgId) {
+// 回転状態を管理
+const rotations = { front: 0, back: 0 };
+
+function previewImage(input, previewDivId, imgId, side) {
     const previewDiv = document.getElementById(previewDivId);
     const img = document.getElementById(imgId);
     if (input.files && input.files[0]) {
@@ -64,13 +110,31 @@ function previewImage(input, previewDivId, imgId) {
         reader.onload = function(e) {
             img.src = e.target.result;
             previewDiv.style.display = 'block';
+            // 回転リセット
+            rotations[side] = 0;
+            document.getElementById(side + '_rotation').value = '0';
+            img.style.transform = '';
         };
         reader.readAsDataURL(input.files[0]);
     }
 }
 
-// 送信時にローディング表示
-document.querySelector('form').addEventListener('submit', function() {
+function rotateImage(side, degrees) {
+    rotations[side] = (rotations[side] + degrees + 360) % 360;
+    document.getElementById(side + '_rotation').value = rotations[side];
+    document.getElementById(side + '-preview-img').style.transform = 'rotate(' + rotations[side] + 'deg)';
+}
+
+// 送信時にローディング表示 + front_imageのバリデーション
+document.querySelector('form').addEventListener('submit', function(e) {
+    // カメラ or ファイルのいずれかに画像が選択されているか確認
+    const frontCamera = document.getElementById('front_camera');
+    const frontFile = document.getElementById('front_file');
+    if (!frontCamera.files.length && !frontFile.files.length) {
+        e.preventDefault();
+        alert('表面の画像を選択してください。');
+        return;
+    }
     const btn = document.getElementById('submit-btn');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>読取中...（しばらくお待ちください）';

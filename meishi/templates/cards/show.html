@@ -51,7 +51,7 @@
     <div class="card-body">
         {% if card.company %}
         <div class="fw-bold"><i class="bi bi-building me-1"></i>{{ card.company.name_ja }}
-            {% if card.company.name_en %}<span class="text-muted small ms-1">{{ card.company.name_en }}</span>{% endif %}
+            {% if card.company.name_kana %}<span class="text-muted small ms-1">{{ card.company.name_kana }}</span>{% endif %}
         </div>
         {% endif %}
         {% if card.department or card.position %}
