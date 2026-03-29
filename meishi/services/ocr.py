@@ -31,11 +31,11 @@ def _cv_to_pil(cv_img):
 
 
 def _detect_card(cv_img):
-    """名刺を検出し、切り出して補正する。
+    """名刺を検出し、回転補正して切り出す。
+    アスペクト比は変更せず、余白除去と傾き補正のみ行う。
     1. グレースケール → ぼかし → Otsu二値化で名刺領域を検出
-    2. 最大輪郭の最小外接矩形（minAreaRect）で四隅を取得
-    3. 透視変換で長方形に補正
-    4. 名刺の標準アスペクト比（91mm x 55mm）にリサイズ
+    2. minAreaRectで傾き角度を取得 → 画像を回転
+    3. 回転後の画像からバウンディングボックスで切り出し
     """
     img_h, img_w = cv_img.shape[:2]
     img_area = img_h * img_w
@@ -70,51 +70,59 @@ def _detect_card(cv_img):
         logger.info("名刺検出: 画像全体が名刺、補正スキップ")
         return cv_img
 
-    # minAreaRectで回転を含む最小外接矩形の4隅を取得
+    # minAreaRectで傾き角度を取得
     rect = cv2.minAreaRect(largest)
-    box = cv2.boxPoints(rect)
-    pts = _order_points(box.astype(np.float32))
+    angle = rect[2]
 
-    # 透視変換
-    CARD_RATIO = 91.0 / 55.0
-    w_a = np.linalg.norm(pts[0] - pts[1])
-    w_b = np.linalg.norm(pts[3] - pts[2])
-    h_a = np.linalg.norm(pts[0] - pts[3])
-    h_b = np.linalg.norm(pts[1] - pts[2])
-    det_w = max(w_a, w_b)
-    det_h = max(h_a, h_b)
+    # OpenCVのminAreaRectの角度を -45〜+45度の範囲に補正
+    if angle < -45:
+        angle += 90
+    elif angle > 45:
+        angle -= 90
 
-    if det_w < 100 or det_h < 100:
+    # 傾きが小さい場合（±2度以内）は回転しない
+    if abs(angle) < 2.0:
+        x, y, w, h = cv2.boundingRect(largest)
+        if w < 100 or h < 100:
+            return cv_img
+        result = cv_img[y:y+h, x:x+w]
+        logger.info(f"名刺検出成功: 切り出し {w}x{h} (傾きなし)")
+        return result
+
+    # 画像を回転して名刺を水平にする
+    center = (img_w / 2, img_h / 2)
+    rot_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+
+    # 回転後のサイズを計算（画像が切れないように拡張）
+    cos_a = abs(rot_matrix[0, 0])
+    sin_a = abs(rot_matrix[0, 1])
+    new_w = int(img_h * sin_a + img_w * cos_a)
+    new_h = int(img_h * cos_a + img_w * sin_a)
+    rot_matrix[0, 2] += (new_w - img_w) / 2
+    rot_matrix[1, 2] += (new_h - img_h) / 2
+
+    rotated = cv2.warpAffine(cv_img, rot_matrix, (new_w, new_h),
+                              borderValue=(255, 255, 255))
+
+    # 回転後の画像で再度二値化して名刺領域を切り出し
+    gray2 = cv2.cvtColor(rotated, cv2.COLOR_BGR2GRAY)
+    blurred2 = cv2.GaussianBlur(gray2, (7, 7), 0)
+    _, thresh2 = cv2.threshold(blurred2, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    thresh2 = cv2.morphologyEx(thresh2, cv2.MORPH_CLOSE, kernel, iterations=3)
+    thresh2 = cv2.morphologyEx(thresh2, cv2.MORPH_OPEN, kernel, iterations=1)
+
+    contours2, _ = cv2.findContours(thresh2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours2:
         return cv_img
 
-    if det_w >= det_h:
-        out_w = int(det_w)
-        out_h = int(out_w / CARD_RATIO)
-    else:
-        out_h = int(det_h)
-        out_w = int(out_h / CARD_RATIO)
+    largest2 = max(contours2, key=cv2.contourArea)
+    x, y, w, h = cv2.boundingRect(largest2)
+    if w < 100 or h < 100:
+        return cv_img
+    result = rotated[y:y+h, x:x+w]
 
-    dst = np.array([
-        [0, 0], [out_w - 1, 0],
-        [out_w - 1, out_h - 1], [0, out_h - 1]
-    ], dtype=np.float32)
-
-    matrix = cv2.getPerspectiveTransform(pts, dst)
-    result = cv2.warpPerspective(cv_img, matrix, (out_w, out_h))
-    logger.info(f"名刺検出成功: {det_w:.0f}x{det_h:.0f} → {out_w}x{out_h} (面積{area/img_area:.0%})")
+    logger.info(f"名刺検出成功: 切り出し {w}x{h} (傾き{angle:.1f}°)")
     return result
-
-
-def _order_points(pts):
-    """4点を [左上, 右上, 右下, 左下] の順に並び替え"""
-    rect = np.zeros((4, 2), dtype=np.float32)
-    s = pts.sum(axis=1)
-    rect[0] = pts[np.argmin(s)]   # 左上: x+y最小
-    rect[2] = pts[np.argmax(s)]   # 右下: x+y最大
-    d = np.diff(pts, axis=1)
-    rect[1] = pts[np.argmin(d)]   # 右上: y-x最小
-    rect[3] = pts[np.argmax(d)]   # 左下: y-x最大
-    return rect
 
 
 def _auto_rotate(cv_img):
@@ -129,7 +137,7 @@ def _auto_rotate(cv_img):
 def preprocess_image(file_bytes):
     """Vision API精度向上のための画像前処理
     - EXIF回転補正（スマホ撮影対応）
-    - 名刺検出（エッジ検出 → 四角形検出 → 透視変換 → 標準アスペクト比）
+    - 名刺検出（傾き補正 + 余白切り出し、アスペクト比は保持）
     - 自動回転（縦長→横長）
     - 長辺2048px制限
     - JPEG品質85で再圧縮

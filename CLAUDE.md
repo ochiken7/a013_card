@@ -40,7 +40,7 @@
 | OCR | Google Cloud Vision API（TEXT_DETECTION） |
 | 構造化 | Claude API（Haiku）でOCRテキスト→JSON変換 |
 | PDF変換 | PyMuPDF（fitz）でPDF→画像変換 |
-| 画像処理 | OpenCV（opencv-python-headless）で名刺検出・台形補正 |
+| 画像処理 | OpenCV（opencv-python-headless）で名刺検出・傾き補正・余白切り出し |
 | フロントエンド | Jinja2 + Bootstrap 5 |
 | 認証 | Flask-Login |
 | スマホ対応 | PWA（manifest.json） |
@@ -178,7 +178,7 @@ cards.name_kanji, cards.name_kana, card_phones.phone_number, companies.name_ja
   → [クライアント側] 画像はCanvas APIで長辺2048px・JPEG85%に縮小してから送信
   → [クライアント側] PDFはそのまま送信（サーバー側で変換）
   → [サーバー側] PDFの場合: PyMuPDF(fitz)で300dpi画像に変換（1ページ目=表面、2ページ目=裏面）
-  → OpenCV前処理（名刺検出→台形補正→自動回転）+ PIL（EXIF補正+リサイズ+JPEG変換）
+  → OpenCV前処理（名刺検出→傾き補正→余白切り出し→自動回転）+ PIL（EXIF補正+リサイズ+JPEG変換）
   → Cloudflare R2に保存（boto3）
   → Google Cloud Vision API（TEXT_DETECTION）で全文字抽出
   → card_images.ocr_raw_text に生テキスト保存 ★重要：再処理用
@@ -332,7 +332,7 @@ ssh -i "D:\VPS\ssh-knd.pem" vpsuser@a013.vpsk.net
 ### カスタマイズ第1弾 ✅（2026-03-29）
 - companies.name_en → name_kana（フリガナ化）
 - OCRプロンプト更新（company_name_kana + name_kana必須生成）
-- OpenCV画像処理（名刺検出・台形補正・自動回転）
+- OpenCV画像処理（名刺検出・傾き補正・余白切り出し・自動回転）
 - 確認画面での手動回転UI
 - クライアント側画像圧縮（Canvas API、Request Entity Too Large対策）
 - カメラ/写真選択ボタン分離
@@ -352,9 +352,9 @@ ssh -i "D:\VPS\ssh-knd.pem" vpsuser@a013.vpsk.net
 - settings Blueprint に追加機能
 
 ### 画像処理の現状と課題
-- OpenCVによる名刺検出（Otsu二値化+minAreaRect+透視変換）は実装済みだが、実際の写真での精度はユーザーから「うまくいっていない」と報告あり
-- 名刺の背景が白い場合など、コントラスト不足で検出が失敗するケースがある
-- 改善が必要な場合は_detect_card()を見直すこと
+- OpenCVによる名刺検出（Otsu二値化+minAreaRect）で傾き補正+余白切り出しを実装
+- 透視変換（台形補正）と強制アスペクト比は廃止済み（画像が歪む問題があったため）
+- 名刺の背景が白い場合など、コントラスト不足で検出が失敗するケースがある（その場合は元画像をそのまま使用）
 
 ---
 
