@@ -1,6 +1,8 @@
 """名刺CRUD + OCR + 画像表示ルート"""
 
+import io
 import logging
+from PIL import Image as PILImage
 from flask import (
     render_template, redirect, url_for, flash, request,
     session, abort, jsonify,
@@ -395,8 +397,6 @@ def save_card():
             rotation = int(request.form.get(f"{img.side}_rotation", 0))
             if rotation:
                 try:
-                    from PIL import Image as PILImage
-                    import io
                     img_bytes = download_image(img.r2_object_key)
                     pil_img = PILImage.open(io.BytesIO(img_bytes))
                     pil_img = pil_img.rotate(-rotation, expand=True)

@@ -157,21 +157,25 @@ def preprocess_image(file_bytes):
     return buffer.getvalue()
 
 
-def pdf_to_images(pdf_bytes, max_pages=None):
+def pdf_to_images(pdf_bytes, max_pages=50):
     """PDFの各ページをJPEG画像バイト列のリストに変換する。
-    max_pages: 変換する最大ページ数（Noneなら全ページ）
+    max_pages: 変換する最大ページ数（デフォルト50）
     """
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    page_count = len(doc) if max_pages is None else min(len(doc), max_pages)
-    images = []
-    for page_num in range(page_count):
-        page = doc[page_num]
-        # 300dpi相当でレンダリング（名刺サイズなら十分な解像度）
-        pix = page.get_pixmap(dpi=300)
-        img_bytes = pix.tobytes("jpeg", jpg_quality=90)
-        images.append(img_bytes)
-    doc.close()
-    return images
+    try:
+        if len(doc) == 0:
+            raise ValueError("PDFにページがありません")
+        page_count = min(len(doc), max_pages)
+        images = []
+        for page_num in range(page_count):
+            page = doc[page_num]
+            # 300dpi相当でレンダリング（名刺サイズなら十分な解像度）
+            pix = page.get_pixmap(dpi=300)
+            img_bytes = pix.tobytes("jpeg", jpg_quality=90)
+            images.append(img_bytes)
+        return images
+    finally:
+        doc.close()
 
 
 def extract_text_from_image(image_bytes):

@@ -94,6 +94,12 @@ function handleFile(input, side) {
     const file = input.files[0];
 
     if (file.type === 'application/pdf') {
+        // PDFサイズ制限（30MB）
+        if (file.size > 30 * 1024 * 1024) {
+            alert('PDFファイルが大きすぎます（上限30MB）。');
+            input.value = '';
+            return;
+        }
         // PDFはそのまま保持（サーバー側で画像変換）
         preparedFiles[side] = file;
         isPdf[side] = true;
@@ -152,6 +158,10 @@ function handleFile(input, side) {
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, w, h);
             canvas.toBlob(function(blob) {
+                if (!blob) {
+                    alert('画像の処理に失敗しました。別の画像をお試しください。');
+                    return;
+                }
                 preparedFiles[side] = blob;
                 const previewDiv = document.getElementById(side + '-preview');
                 const previewImg = document.getElementById(side + '-preview-img');
@@ -159,7 +169,13 @@ function handleFile(input, side) {
                 previewDiv.style.display = 'block';
             }, 'image/jpeg', JPEG_QUALITY);
         };
+        img.onerror = function() {
+            alert('画像を読み込めませんでした。ファイルが壊れている可能性があります。');
+        };
         img.src = e.target.result;
+    };
+    reader.onerror = function() {
+        alert('ファイルの読み込みに失敗しました。');
     };
     reader.readAsDataURL(file);
 }

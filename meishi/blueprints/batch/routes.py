@@ -93,7 +93,8 @@ def upload():
                 item_count += 1
 
         except Exception as e:
-            logger.error(f"バッチアップロード失敗 ({f.filename}): {e}")
+            error_context = "PDF変換" if is_pdf else "画像処理"
+            logger.error(f"バッチアップロード失敗 ({f.filename}) [{error_context}]: {e}")
             item = BatchItem(
                 batch_id=job.id,
                 r2_object_key="",
