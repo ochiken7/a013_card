@@ -72,12 +72,14 @@
                      style="width: 40px; height: 40px; font-size: 0.9rem;">
                     {{ (card.name_kanji or '?')[0] }}
                 </div>
-                <div class="flex-grow-1 min-width-0">
+                <div class="flex-grow-1" style="min-width: 0;">
                     <div class="fw-bold text-truncate">{{ card.name_kanji or '(氏名なし)' }}</div>
-                    <div class="text-muted small text-truncate">
-                        {% if card.company %}{{ card.company.name_ja }}{% endif %}
-                        {% if card.position %} / {{ card.position }}{% endif %}
-                    </div>
+                    {% if card.company %}
+                    <div class="text-muted small text-truncate">{{ card.company.name_ja }}</div>
+                    {% endif %}
+                    {% if card.position %}
+                    <div class="text-muted small text-truncate">{{ card.position }}</div>
+                    {% endif %}
                 </div>
                 {% if card.id in duplicate_ids %}
                 <span class="badge bg-warning text-dark ms-1">重複</span>

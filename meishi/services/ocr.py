@@ -31,94 +31,140 @@ def _cv_to_pil(cv_img):
 
 def _detect_card(cv_img):
     """名刺の外枠を検出し、透視変換で長方形に補正する。
-    処理:
-    1. グレースケール化
-    2. エッジ検出（Canny）
-    3. 輪郭検出で最大の四角形を見つける（名刺の外枠）
-    4. 四隅の座標を取得
-    5. 透視変換で正しい長方形に補正
-    6. 名刺の標準アスペクト比（91mm x 55mm）にリサイズ
+    複数の検出手法を試し、最良の結果を使う。
     失敗時は元画像を返す。
     """
+    img_h, img_w = cv_img.shape[:2]
+    img_area = img_h * img_w
+
     # 1. グレースケール化
     gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
 
-    # 2. エッジ検出（ガウシアンブラー → Canny）
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    edges = cv2.Canny(blurred, 30, 100)
+    # 複数の二値化手法でエッジマスクを生成し、それぞれで四角形を探す
+    candidates = []
 
-    # エッジを太くして輪郭を繋げやすくする
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-    edges = cv2.dilate(edges, kernel, iterations=2)
-    edges = cv2.erode(edges, kernel, iterations=1)
+    # --- 手法A: 適応的閾値（明暗差がある背景に強い） ---
+    blur_a = cv2.GaussianBlur(gray, (5, 5), 0)
+    thresh_a = cv2.adaptiveThreshold(
+        blur_a, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV, 11, 2
+    )
+    candidates.append(("adaptive", thresh_a))
 
-    # 3. 輪郭検出で最大の四角形を見つける
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # --- 手法B: Otsu二値化（背景と名刺のコントラストが明確なケース） ---
+    blur_b = cv2.GaussianBlur(gray, (5, 5), 0)
+    _, thresh_b = cv2.threshold(blur_b, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    candidates.append(("otsu", thresh_b))
+
+    # --- 手法C: Canny（複数パラメータ） ---
+    blur_c = cv2.GaussianBlur(gray, (7, 7), 0)
+    for low, high in [(20, 80), (40, 120), (60, 180)]:
+        edges = cv2.Canny(blur_c, low, high)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        edges = cv2.dilate(edges, kernel, iterations=2)
+        edges = cv2.erode(edges, kernel, iterations=1)
+        candidates.append((f"canny_{low}_{high}", edges))
+
+    # --- 手法D: HSV色空間で白い領域を検出（白い名刺に有効） ---
+    hsv = cv2.cvtColor(cv_img, cv2.COLOR_BGR2HSV)
+    # 白い領域: 低彩度 + 高明度
+    white_mask = cv2.inRange(hsv, (0, 0, 180), (180, 40, 255))
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+    white_mask = cv2.morphologyEx(white_mask, cv2.MORPH_CLOSE, kernel, iterations=3)
+    white_mask = cv2.morphologyEx(white_mask, cv2.MORPH_OPEN, kernel, iterations=1)
+    candidates.append(("white_detect", white_mask))
+
+    # 各手法で四角形を探し、最も面積が大きい四角形を採用
+    best_quad = None
+    best_area = 0
+    best_method = ""
+
+    for method_name, binary_img in candidates:
+        quad = _find_largest_quad(binary_img, img_area)
+        if quad is not None:
+            area = cv2.contourArea(quad)
+            if area > best_area:
+                best_area = area
+                best_quad = quad
+                best_method = method_name
+
+    if best_quad is not None and best_area > img_area * 0.10:
+        result = _perspective_transform(cv_img, best_quad)
+        if result is not None:
+            logger.info(f"名刺検出成功 (method={best_method}, area={best_area/img_area:.1%})")
+            return result
+
+    # 全手法で四角形が見つからない場合、余白除去にフォールバック
+    logger.info("名刺四角形検出失敗、フォールバック余白除去を実行")
+    return _fallback_crop(cv_img, gray)
+
+
+def _find_largest_quad(binary_img, img_area):
+    """二値画像から最大の四角形輪郭を見つける"""
+    contours, _ = cv2.findContours(binary_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
-        return cv_img
+        return None
 
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
-    img_area = cv_img.shape[0] * cv_img.shape[1]
 
     for cnt in contours[:10]:
         area = cv2.contourArea(cnt)
-        # 画像の15%未満の輪郭は名刺ではない
-        if area < img_area * 0.15:
+        if area < img_area * 0.10:
             break
 
         peri = cv2.arcLength(cnt, True)
-        approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
+        # 複数の近似精度で試す
+        for eps in [0.02, 0.03, 0.04, 0.05]:
+            approx = cv2.approxPolyDP(cnt, eps * peri, True)
+            if len(approx) == 4:
+                # 凸性チェック
+                if cv2.isContourConvex(approx):
+                    return approx.reshape(4, 2).astype(np.float32)
 
-        if len(approx) == 4:
-            # 4. 四隅の座標を取得
-            pts = approx.reshape(4, 2).astype(np.float32)
-            rect = _order_points(pts)
+    return None
 
-            # 5. 透視変換で正しい長方形に補正
-            # 名刺の標準アスペクト比: 91mm x 55mm
-            CARD_RATIO = 91.0 / 55.0  # 約1.6545
 
-            width_a = np.linalg.norm(rect[0] - rect[1])
-            width_b = np.linalg.norm(rect[3] - rect[2])
-            detected_w = max(width_a, width_b)
+def _perspective_transform(cv_img, pts):
+    """4点から透視変換して名刺サイズの長方形に補正"""
+    rect = _order_points(pts)
 
-            height_a = np.linalg.norm(rect[0] - rect[3])
-            height_b = np.linalg.norm(rect[1] - rect[2])
-            detected_h = max(height_a, height_b)
+    # 名刺の標準アスペクト比: 91mm x 55mm
+    CARD_RATIO = 91.0 / 55.0
 
-            if detected_w < 100 or detected_h < 100:
-                continue
+    width_a = np.linalg.norm(rect[0] - rect[1])
+    width_b = np.linalg.norm(rect[3] - rect[2])
+    detected_w = max(width_a, width_b)
 
-            # 6. 標準アスペクト比にリサイズ
-            # 横長・縦長どちらの向きかを判定
-            if detected_w >= detected_h:
-                # 横長（通常の向き）
-                out_w = int(detected_w)
-                out_h = int(out_w / CARD_RATIO)
-            else:
-                # 縦長（90度回転された状態）
-                out_h = int(detected_h)
-                out_w = int(out_h / CARD_RATIO)
+    height_a = np.linalg.norm(rect[0] - rect[3])
+    height_b = np.linalg.norm(rect[1] - rect[2])
+    detected_h = max(height_a, height_b)
 
-            dst = np.array([
-                [0, 0], [out_w - 1, 0],
-                [out_w - 1, out_h - 1], [0, out_h - 1]
-            ], dtype=np.float32)
+    if detected_w < 100 or detected_h < 100:
+        return None
 
-            matrix = cv2.getPerspectiveTransform(rect, dst)
-            result = cv2.warpPerspective(cv_img, matrix, (out_w, out_h))
-            logger.info(f"名刺検出成功: {detected_w:.0f}x{detected_h:.0f} → {out_w}x{out_h}")
-            return result
+    # 横長・縦長どちらの向きかを判定
+    if detected_w >= detected_h:
+        out_w = int(detected_w)
+        out_h = int(out_w / CARD_RATIO)
+    else:
+        out_h = int(detected_h)
+        out_w = int(out_h / CARD_RATIO)
 
-    # 四角形が見つからない場合、閾値ベースのクロップにフォールバック
-    return _fallback_crop(cv_img, gray)
+    dst = np.array([
+        [0, 0], [out_w - 1, 0],
+        [out_w - 1, out_h - 1], [0, out_h - 1]
+    ], dtype=np.float32)
+
+    matrix = cv2.getPerspectiveTransform(rect, dst)
+    return cv2.warpPerspective(cv_img, matrix, (out_w, out_h))
 
 
 def _fallback_crop(cv_img, gray):
     """四角形検出に失敗した場合の余白除去フォールバック"""
-    _, thresh = cv2.threshold(gray, 230, 255, cv2.THRESH_BINARY_INV)
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-    thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+    # Otsu二値化で前景を検出
+    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=3)
 
     coords = cv2.findNonZero(thresh)
     if coords is None:
@@ -126,10 +172,10 @@ def _fallback_crop(cv_img, gray):
 
     x, y, w, h = cv2.boundingRect(coords)
     img_h, img_w = cv_img.shape[:2]
-    if w < img_w * 0.1 or h < img_h * 0.1:
+    if w < img_w * 0.2 or h < img_h * 0.2:
         return cv_img
 
-    margin = 5
+    margin = 10
     x = max(0, x - margin)
     y = max(0, y - margin)
     w = min(img_w - x, w + margin * 2)
