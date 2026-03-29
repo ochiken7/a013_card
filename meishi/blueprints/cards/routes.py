@@ -163,7 +163,7 @@ def create_card():
 
         if is_pdf:
             # === PDF処理: ページを画像に変換 ===
-            page_images = pdf_to_images(front_raw)
+            page_images = pdf_to_images(front_raw, max_pages=2)
             if not page_images:
                 flash("PDFから画像を取得できませんでした。", "danger")
                 return redirect(url_for("cards.new_card"))

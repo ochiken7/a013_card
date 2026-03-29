@@ -157,13 +157,14 @@ def preprocess_image(file_bytes):
     return buffer.getvalue()
 
 
-def pdf_to_images(pdf_bytes):
+def pdf_to_images(pdf_bytes, max_pages=None):
     """PDFの各ページをJPEG画像バイト列のリストに変換する。
-    1ページ目=表面、2ページ目=裏面として返す（最大2ページ）。
+    max_pages: 変換する最大ページ数（Noneなら全ページ）
     """
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    page_count = len(doc) if max_pages is None else min(len(doc), max_pages)
     images = []
-    for page_num in range(min(len(doc), 2)):
+    for page_num in range(page_count):
         page = doc[page_num]
         # 300dpi相当でレンダリング（名刺サイズなら十分な解像度）
         pix = page.get_pixmap(dpi=300)

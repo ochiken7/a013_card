@@ -9,7 +9,7 @@ from meishi.blueprints.batch import batch_bp
 from meishi.models.batch import BatchJob, BatchItem
 from meishi.models.card import Card, CardPhone, CardEmail, CardQualification, CardImage
 from meishi.services.r2 import upload_image, generate_object_key, download_image
-from meishi.services.ocr import preprocess_image, extract_text_from_image
+from meishi.services.ocr import preprocess_image, extract_text_from_image, pdf_to_images
 from meishi.services.structurer import structure_card_data
 from meishi.services.company_matcher import match_or_create_company
 
@@ -35,40 +35,65 @@ def upload():
     """複数画像をアップロードしてバッチジョブを作成"""
     files = request.files.getlist("images")
 
-    # 画像ファイルのみ抽出
     valid_files = [f for f in files if f and f.filename]
     if not valid_files:
-        flash("画像ファイルを選択してください。", "warning")
+        flash("画像またはPDFファイルを選択してください。", "warning")
         return redirect(url_for("batch.index"))
 
-    # バッチジョブ作成
+    # バッチジョブ作成（total_countはPDF展開後に確定）
     job = BatchJob(
         created_by=current_user.id,
         status="pending",
-        total_count=len(valid_files),
+        total_count=0,
         processed_count=0,
     )
     db.session.add(job)
     db.session.flush()
 
-    # 各ファイルをR2にアップロード＋BatchItem作成
+    item_count = 0
+
     for f in valid_files:
         try:
             raw_bytes = f.read()
-            image_bytes = preprocess_image(raw_bytes)
-            object_key = generate_object_key(current_user.id, "front", f.filename)
-            upload_image(image_bytes, object_key)
-
-            item = BatchItem(
-                batch_id=job.id,
-                r2_object_key=object_key,
-                original_filename=f.filename,
-                status="pending",
+            is_pdf = (
+                f.filename.lower().endswith(".pdf")
+                or f.content_type == "application/pdf"
             )
-            db.session.add(item)
+
+            if is_pdf:
+                # PDFの各ページを1枚の名刺として展開
+                page_images = pdf_to_images(raw_bytes)
+                for page_num, page_bytes in enumerate(page_images):
+                    image_bytes = preprocess_image(page_bytes)
+                    page_label = f"{f.filename}_p{page_num + 1}"
+                    object_key = generate_object_key(current_user.id, "front", page_label + ".jpg")
+                    upload_image(image_bytes, object_key)
+
+                    item = BatchItem(
+                        batch_id=job.id,
+                        r2_object_key=object_key,
+                        original_filename=page_label,
+                        status="pending",
+                    )
+                    db.session.add(item)
+                    item_count += 1
+            else:
+                # 画像ファイル（従来通り）
+                image_bytes = preprocess_image(raw_bytes)
+                object_key = generate_object_key(current_user.id, "front", f.filename)
+                upload_image(image_bytes, object_key)
+
+                item = BatchItem(
+                    batch_id=job.id,
+                    r2_object_key=object_key,
+                    original_filename=f.filename,
+                    status="pending",
+                )
+                db.session.add(item)
+                item_count += 1
+
         except Exception as e:
             logger.error(f"バッチアップロード失敗 ({f.filename}): {e}")
-            # アップロード失敗のアイテムも記録する
             item = BatchItem(
                 batch_id=job.id,
                 r2_object_key="",
@@ -77,9 +102,11 @@ def upload():
                 error_message=f"アップロード失敗: {e}",
             )
             db.session.add(item)
+            item_count += 1
 
+    job.total_count = item_count
     db.session.commit()
-    flash(f"{len(valid_files)} 枚の画像をアップロードしました。", "success")
+    flash(f"{item_count} 枚をアップロードしました。", "success")
     return redirect(url_for("batch.index"))
 
 

@@ -15,10 +15,10 @@
     <div class="card-body">
         <form method="POST" action="{{ url_for('batch.upload') }}" enctype="multipart/form-data">
             <div class="mb-3">
-                <label for="images" class="form-label">名刺画像を選択（複数可）</label>
+                <label for="images" class="form-label">名刺画像・PDFを選択（複数可）</label>
                 <input type="file" class="form-control" id="images" name="images"
-                       accept="image/*" multiple required>
-                <div class="form-text">JPEG・PNG形式の名刺画像をまとめて選択できます。</div>
+                       accept="image/*,application/pdf" multiple required>
+                <div class="form-text">JPEG・PNG・PDF形式に対応。PDFは各ページを1枚の名刺として処理します。</div>
             </div>
             <div id="file-preview" class="mb-3 d-none">
                 <small class="text-muted">選択中: <span id="file-count">0</span> 枚</small>
