@@ -15,7 +15,7 @@ from meishi.models.card import Card, CardPhone, CardEmail, CardQualification, Ca
 from meishi.models.company import Company
 from meishi.models.tag import Tag, CardTag
 from meishi.services.r2 import (
-    upload_image, generate_object_key, get_presigned_url, delete_image,
+    upload_image, download_image, generate_object_key, get_presigned_url, delete_image,
 )
 from meishi.services.ocr import preprocess_image, extract_text_from_image
 from meishi.services.structurer import structure_card_data, structured_to_form_data
@@ -150,16 +150,13 @@ def create_card():
         flash("表面の画像を選択してください。", "danger")
         return redirect(url_for("cards.new_card"))
 
-    front_rotation = int(request.form.get("front_rotation", 0))
-    back_rotation = int(request.form.get("back_rotation", 0))
-
     card_image_ids = []
     front_text = ""
     back_text = ""
 
     try:
         # === 表面処理 ===
-        front_bytes = preprocess_image(front_file.read(), rotation=front_rotation)
+        front_bytes = preprocess_image(front_file.read())
         front_key = generate_object_key(current_user.id, "front", front_file.filename)
         upload_image(front_bytes, front_key)
 
@@ -183,7 +180,7 @@ def create_card():
 
         # === 裏面処理（あれば） ===
         if back_file and back_file.filename:
-            back_bytes = preprocess_image(back_file.read(), rotation=back_rotation)
+            back_bytes = preprocess_image(back_file.read())
             back_key = generate_object_key(current_user.id, "back", back_file.filename)
             upload_image(back_bytes, back_key)
 
@@ -258,7 +255,7 @@ def confirm_card():
     return render_template(
         "cards/confirm.html",
         form_data=form_data,
-        image_urls=image_urls,
+        confirm_image_urls=image_urls,
         front_text=ocr_data.get("front_text", ""),
         back_text=ocr_data.get("back_text", ""),
         visibility=ocr_data.get("visibility", "shared"),
@@ -335,11 +332,26 @@ def save_card():
                 sort_order=i,
             ))
 
-    # 画像をカードに紐付け
+    # 画像をカードに紐付け（回転があれば適用）
     for img_id in ocr_data.get("card_image_ids", []):
         img = CardImage.query.get(img_id)
         if img:
             img.card_id = card.id
+            # 手動回転が指定されている場合、R2の画像を回転して再保存
+            rotation = int(request.form.get(f"{img.side}_rotation", 0))
+            if rotation:
+                try:
+                    from PIL import Image as PILImage
+                    import io
+                    img_bytes = download_image(img.r2_object_key)
+                    pil_img = PILImage.open(io.BytesIO(img_bytes))
+                    pil_img = pil_img.rotate(-rotation, expand=True)
+                    buf = io.BytesIO()
+                    pil_img.save(buf, format="JPEG", quality=85)
+                    upload_image(buf.getvalue(), img.r2_object_key)
+                    logger.info(f"画像回転適用: {img.r2_object_key} ({rotation}°)")
+                except Exception as e:
+                    logger.error(f"画像回転エラー: {e}")
 
     db.session.commit()
     flash("名刺を登録しました。", "success")

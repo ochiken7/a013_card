@@ -29,87 +29,112 @@ def _cv_to_pil(cv_img):
     return Image.fromarray(cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB))
 
 
-def _auto_crop(cv_img):
-    """余白（白背景）を自動除去して名刺部分を切り抜く"""
+def _detect_card(cv_img):
+    """名刺の外枠を検出し、透視変換で長方形に補正する。
+    処理:
+    1. グレースケール化
+    2. エッジ検出（Canny）
+    3. 輪郭検出で最大の四角形を見つける（名刺の外枠）
+    4. 四隅の座標を取得
+    5. 透視変換で正しい長方形に補正
+    6. 名刺の標準アスペクト比（91mm x 55mm）にリサイズ
+    失敗時は元画像を返す。
+    """
+    # 1. グレースケール化
     gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
-    # 白背景を除去するため、閾値で二値化（暗い部分を検出）
-    _, thresh = cv2.threshold(gray, 230, 255, cv2.THRESH_BINARY_INV)
 
-    # ノイズ除去
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-    thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
-
-    # 非白色領域のバウンディングボックス
-    coords = cv2.findNonZero(thresh)
-    if coords is None:
-        return cv_img
-
-    x, y, w, h = cv2.boundingRect(coords)
-    # 元画像の10%以下なら誤検出として無視
-    img_h, img_w = cv_img.shape[:2]
-    if w < img_w * 0.1 or h < img_h * 0.1:
-        return cv_img
-
-    # 少し余白を残す（5px）
-    margin = 5
-    x = max(0, x - margin)
-    y = max(0, y - margin)
-    w = min(img_w - x, w + margin * 2)
-    h = min(img_h - y, h + margin * 2)
-
-    return cv_img[y:y+h, x:x+w]
-
-
-def _perspective_correct(cv_img):
-    """台形補正: 最大の四角形輪郭を検出して射影変換する。失敗時は元画像を返す"""
-    gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
+    # 2. エッジ検出（ガウシアンブラー → Canny）
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    edges = cv2.Canny(blurred, 50, 150)
+    edges = cv2.Canny(blurred, 30, 100)
 
-    # 輪郭検出
+    # エッジを太くして輪郭を繋げやすくする
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    edges = cv2.dilate(edges, kernel, iterations=2)
+    edges = cv2.erode(edges, kernel, iterations=1)
+
+    # 3. 輪郭検出で最大の四角形を見つける
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
         return cv_img
 
-    # 面積が大きい順にソートし、四角形を探す
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
     img_area = cv_img.shape[0] * cv_img.shape[1]
 
-    for cnt in contours[:5]:
+    for cnt in contours[:10]:
         area = cv2.contourArea(cnt)
-        # 画像の20%未満の輪郭は無視
-        if area < img_area * 0.2:
+        # 画像の15%未満の輪郭は名刺ではない
+        if area < img_area * 0.15:
             break
 
         peri = cv2.arcLength(cnt, True)
         approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
 
         if len(approx) == 4:
+            # 4. 四隅の座標を取得
             pts = approx.reshape(4, 2).astype(np.float32)
-            # 4点を左上・右上・右下・左下に並び替え
             rect = _order_points(pts)
 
-            # 変換先のサイズを計算
+            # 5. 透視変換で正しい長方形に補正
+            # 名刺の標準アスペクト比: 91mm x 55mm
+            CARD_RATIO = 91.0 / 55.0  # 約1.6545
+
             width_a = np.linalg.norm(rect[0] - rect[1])
             width_b = np.linalg.norm(rect[3] - rect[2])
-            max_width = int(max(width_a, width_b))
+            detected_w = max(width_a, width_b)
 
             height_a = np.linalg.norm(rect[0] - rect[3])
             height_b = np.linalg.norm(rect[1] - rect[2])
-            max_height = int(max(height_a, height_b))
+            detected_h = max(height_a, height_b)
 
-            if max_width < 100 or max_height < 100:
+            if detected_w < 100 or detected_h < 100:
                 continue
 
+            # 6. 標準アスペクト比にリサイズ
+            # 横長・縦長どちらの向きかを判定
+            if detected_w >= detected_h:
+                # 横長（通常の向き）
+                out_w = int(detected_w)
+                out_h = int(out_w / CARD_RATIO)
+            else:
+                # 縦長（90度回転された状態）
+                out_h = int(detected_h)
+                out_w = int(out_h / CARD_RATIO)
+
             dst = np.array([
-                [0, 0], [max_width - 1, 0],
-                [max_width - 1, max_height - 1], [0, max_height - 1]
+                [0, 0], [out_w - 1, 0],
+                [out_w - 1, out_h - 1], [0, out_h - 1]
             ], dtype=np.float32)
 
             matrix = cv2.getPerspectiveTransform(rect, dst)
-            return cv2.warpPerspective(cv_img, matrix, (max_width, max_height))
+            result = cv2.warpPerspective(cv_img, matrix, (out_w, out_h))
+            logger.info(f"名刺検出成功: {detected_w:.0f}x{detected_h:.0f} → {out_w}x{out_h}")
+            return result
 
-    return cv_img
+    # 四角形が見つからない場合、閾値ベースのクロップにフォールバック
+    return _fallback_crop(cv_img, gray)
+
+
+def _fallback_crop(cv_img, gray):
+    """四角形検出に失敗した場合の余白除去フォールバック"""
+    _, thresh = cv2.threshold(gray, 230, 255, cv2.THRESH_BINARY_INV)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+
+    coords = cv2.findNonZero(thresh)
+    if coords is None:
+        return cv_img
+
+    x, y, w, h = cv2.boundingRect(coords)
+    img_h, img_w = cv_img.shape[:2]
+    if w < img_w * 0.1 or h < img_h * 0.1:
+        return cv_img
+
+    margin = 5
+    x = max(0, x - margin)
+    y = max(0, y - margin)
+    w = min(img_w - x, w + margin * 2)
+    h = min(img_h - y, h + margin * 2)
+    return cv_img[y:y+h, x:x+w]
 
 
 def _order_points(pts):
@@ -133,12 +158,10 @@ def _auto_rotate(cv_img):
     return cv_img
 
 
-def preprocess_image(file_bytes, rotation=0):
+def preprocess_image(file_bytes):
     """Vision API精度向上のための画像前処理
     - EXIF回転補正（スマホ撮影対応）
-    - 手動回転（rotation: 0, 90, 180, 270）
-    - 自動クロップ（余白除去）
-    - 台形補正（射影変換）
+    - 名刺検出（エッジ検出 → 四角形検出 → 透視変換 → 標準アスペクト比）
     - 自動回転（縦長→横長）
     - 長辺2048px制限
     - JPEG品質85で再圧縮
@@ -146,18 +169,13 @@ def preprocess_image(file_bytes, rotation=0):
     img = Image.open(io.BytesIO(file_bytes))
     img = ImageOps.exif_transpose(img)
 
-    # 手動回転（ユーザー指定）
-    if rotation:
-        img = img.rotate(-rotation, expand=True)
-
     # RGBAの場合はRGBに変換
     if img.mode in ("RGBA", "P"):
         img = img.convert("RGB")
 
     # OpenCVで画像処理
     cv_img = _pil_to_cv(img)
-    cv_img = _auto_crop(cv_img)
-    cv_img = _perspective_correct(cv_img)
+    cv_img = _detect_card(cv_img)
     cv_img = _auto_rotate(cv_img)
     img = _cv_to_pil(cv_img)
 
