@@ -17,7 +17,7 @@ from meishi.models.tag import Tag, CardTag
 from meishi.services.r2 import (
     upload_image, download_image, generate_object_key, get_presigned_url, delete_image,
 )
-from meishi.services.ocr import preprocess_image, extract_text_from_image
+from meishi.services.ocr import preprocess_image, extract_text_from_image, pdf_to_images
 from meishi.services.structurer import structure_card_data, structured_to_form_data
 from meishi.services.company_matcher import match_or_create_company
 
@@ -147,7 +147,7 @@ def create_card():
     visibility = request.form.get("visibility", "shared")
 
     if not front_file or not front_file.filename:
-        flash("表面の画像を選択してください。", "danger")
+        flash("表面の画像またはPDFを選択してください。", "danger")
         return redirect(url_for("cards.new_card"))
 
     card_image_ids = []
@@ -155,56 +155,110 @@ def create_card():
     back_text = ""
 
     try:
-        # === 表面処理 ===
-        front_bytes = preprocess_image(front_file.read())
-        front_key = generate_object_key(current_user.id, "front", front_file.filename)
-        upload_image(front_bytes, front_key)
-
-        # Vision API
-        try:
-            front_text = extract_text_from_image(front_bytes)
-        except Exception as e:
-            logger.error(f"表面OCRエラー: {e}")
-            flash("画像の文字読取に失敗しました。手動で入力してください。", "warning")
-
-        # DB保存
-        front_image = CardImage(
-            side="front",
-            r2_object_key=front_key,
-            original_filename=front_file.filename,
-            ocr_raw_text=front_text,
+        front_raw = front_file.read()
+        is_pdf = (
+            front_file.filename.lower().endswith(".pdf")
+            or front_file.content_type == "application/pdf"
         )
-        db.session.add(front_image)
-        db.session.flush()
-        card_image_ids.append(front_image.id)
 
-        # === 裏面処理（あれば） ===
-        if back_file and back_file.filename:
-            back_bytes = preprocess_image(back_file.read())
-            back_key = generate_object_key(current_user.id, "back", back_file.filename)
-            upload_image(back_bytes, back_key)
+        if is_pdf:
+            # === PDF処理: ページを画像に変換 ===
+            page_images = pdf_to_images(front_raw)
+            if not page_images:
+                flash("PDFから画像を取得できませんでした。", "danger")
+                return redirect(url_for("cards.new_card"))
+
+            # 1ページ目 = 表面
+            front_bytes = preprocess_image(page_images[0])
+            front_key = generate_object_key(current_user.id, "front", "front.jpg")
+            upload_image(front_bytes, front_key)
 
             try:
-                back_text = extract_text_from_image(back_bytes)
+                front_text = extract_text_from_image(front_bytes)
             except Exception as e:
-                logger.error(f"裏面OCRエラー: {e}")
+                logger.error(f"表面OCRエラー: {e}")
+                flash("画像の文字読取に失敗しました。手動で入力してください。", "warning")
 
-            back_image = CardImage(
-                side="back",
-                r2_object_key=back_key,
-                original_filename=back_file.filename,
-                ocr_raw_text=back_text,
+            front_image = CardImage(
+                side="front",
+                r2_object_key=front_key,
+                original_filename=front_file.filename,
+                ocr_raw_text=front_text,
             )
-            db.session.add(back_image)
+            db.session.add(front_image)
             db.session.flush()
-            card_image_ids.append(back_image.id)
+            card_image_ids.append(front_image.id)
+
+            # 2ページ目 = 裏面（あれば）
+            if len(page_images) >= 2:
+                back_bytes = preprocess_image(page_images[1])
+                back_key = generate_object_key(current_user.id, "back", "back.jpg")
+                upload_image(back_bytes, back_key)
+
+                try:
+                    back_text = extract_text_from_image(back_bytes)
+                except Exception as e:
+                    logger.error(f"裏面OCRエラー: {e}")
+
+                back_image = CardImage(
+                    side="back",
+                    r2_object_key=back_key,
+                    original_filename=front_file.filename,
+                    ocr_raw_text=back_text,
+                )
+                db.session.add(back_image)
+                db.session.flush()
+                card_image_ids.append(back_image.id)
+
+        else:
+            # === 画像処理（従来通り） ===
+            front_bytes = preprocess_image(front_raw)
+            front_key = generate_object_key(current_user.id, "front", front_file.filename)
+            upload_image(front_bytes, front_key)
+
+            try:
+                front_text = extract_text_from_image(front_bytes)
+            except Exception as e:
+                logger.error(f"表面OCRエラー: {e}")
+                flash("画像の文字読取に失敗しました。手動で入力してください。", "warning")
+
+            front_image = CardImage(
+                side="front",
+                r2_object_key=front_key,
+                original_filename=front_file.filename,
+                ocr_raw_text=front_text,
+            )
+            db.session.add(front_image)
+            db.session.flush()
+            card_image_ids.append(front_image.id)
+
+            # 裏面（あれば）
+            if back_file and back_file.filename:
+                back_bytes = preprocess_image(back_file.read())
+                back_key = generate_object_key(current_user.id, "back", back_file.filename)
+                upload_image(back_bytes, back_key)
+
+                try:
+                    back_text = extract_text_from_image(back_bytes)
+                except Exception as e:
+                    logger.error(f"裏面OCRエラー: {e}")
+
+                back_image = CardImage(
+                    side="back",
+                    r2_object_key=back_key,
+                    original_filename=back_file.filename,
+                    ocr_raw_text=back_text,
+                )
+                db.session.add(back_image)
+                db.session.flush()
+                card_image_ids.append(back_image.id)
 
         db.session.commit()
 
     except Exception as e:
         db.session.rollback()
         logger.error(f"アップロードエラー: {e}")
-        flash("画像のアップロードに失敗しました。もう一度お試しください。", "danger")
+        flash("アップロードに失敗しました。もう一度お試しください。", "danger")
         return redirect(url_for("cards.new_card"))
 
     # === Claude API 構造化 ===

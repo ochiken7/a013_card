@@ -1,4 +1,4 @@
-"""Google Cloud Vision API によるOCR処理 + 画像前処理"""
+"""Google Cloud Vision API によるOCR処理 + 画像前処理 + PDF対応"""
 
 import io
 import base64
@@ -6,6 +6,7 @@ import time
 import logging
 
 import cv2
+import fitz  # PyMuPDF
 import numpy as np
 import requests
 from PIL import Image, ImageOps
@@ -154,6 +155,22 @@ def preprocess_image(file_bytes):
     buffer = io.BytesIO()
     img.save(buffer, format="JPEG", quality=85)
     return buffer.getvalue()
+
+
+def pdf_to_images(pdf_bytes):
+    """PDFの各ページをJPEG画像バイト列のリストに変換する。
+    1ページ目=表面、2ページ目=裏面として返す（最大2ページ）。
+    """
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    images = []
+    for page_num in range(min(len(doc), 2)):
+        page = doc[page_num]
+        # 300dpi相当でレンダリング（名刺サイズなら十分な解像度）
+        pix = page.get_pixmap(dpi=300)
+        img_bytes = pix.tobytes("jpeg", jpg_quality=90)
+        images.append(img_bytes)
+    doc.close()
+    return images
 
 
 def extract_text_from_image(image_bytes):

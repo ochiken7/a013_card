@@ -22,8 +22,8 @@
                 <i class="bi bi-image me-1"></i>写真を選択
             </button>
         </div>
-        <input type="file" id="front_picker" class="d-none" accept="image/*"
-               onchange="handleImage(this, 'front')">
+        <input type="file" id="front_picker" class="d-none" accept="image/*,application/pdf"
+               onchange="handleFile(this, 'front')">
     </div>
 
     <!-- 裏面画像 -->
@@ -43,8 +43,8 @@
                     <i class="bi bi-image me-1"></i>写真を選択
                 </button>
             </div>
-            <input type="file" id="back_picker" class="d-none" accept="image/*"
-                   onchange="handleImage(this, 'back')">
+            <input type="file" id="back_picker" class="d-none" accept="image/*,application/pdf"
+                   onchange="handleFile(this, 'back')">
         </div>
         <button type="button" id="add-back-btn" class="btn btn-outline-secondary btn-sm"
                 onclick="document.getElementById('back-section').style.display='block'; this.style.display='none';">
@@ -73,8 +73,9 @@
 
 {% block scripts %}
 <script>
-// 縮小済み画像Blobを保持
-const compressedImages = { front: null, back: null };
+// 処理済みファイルを保持（画像=圧縮Blob、PDF=元ファイル）
+const preparedFiles = { front: null, back: null };
+const isPdf = { front: false, back: false };
 const MAX_SIZE = 2048;
 const JPEG_QUALITY = 0.85;
 
@@ -88,16 +89,53 @@ function pickImage(side, useCamera) {
     picker.click();
 }
 
-function handleImage(input, side) {
+function handleFile(input, side) {
     if (!input.files || !input.files[0]) return;
     const file = input.files[0];
 
-    // Canvasで縮小してBlobにする
+    if (file.type === 'application/pdf') {
+        // PDFはそのまま保持（サーバー側で画像変換）
+        preparedFiles[side] = file;
+        isPdf[side] = true;
+        // プレビューにPDFアイコンを表示
+        const previewDiv = document.getElementById(side + '-preview');
+        const previewImg = document.getElementById(side + '-preview-img');
+        previewImg.src = '';
+        previewImg.alt = 'PDF: ' + file.name;
+        previewImg.style.display = 'none';
+        // PDFラベルを表示
+        let label = previewDiv.querySelector('.pdf-label');
+        if (!label) {
+            label = document.createElement('div');
+            label.className = 'pdf-label text-center p-3';
+            previewDiv.querySelector('.text-center').appendChild(label);
+        }
+        label.innerHTML = '<i class="bi bi-file-earmark-pdf" style="font-size:2.5rem;color:#dc3545;"></i>'
+            + '<div class="small text-muted mt-1">' + file.name + '</div>';
+        previewDiv.style.display = 'block';
+        // PDFの場合は裏面セクションを隠す（PDF内に含まれるため）
+        if (side === 'front') {
+            document.getElementById('back-section').style.display = 'none';
+            document.getElementById('add-back-btn').style.display = 'none';
+        }
+        return;
+    }
+
+    // 画像: Canvasで縮小してBlobにする
+    isPdf[side] = false;
+    // PDFから画像に戻した場合、裏面ボタンを復活
+    if (side === 'front') {
+        document.getElementById('add-back-btn').style.display = '';
+        // PDFラベルがあれば消す
+        const oldLabel = document.getElementById('front-preview').querySelector('.pdf-label');
+        if (oldLabel) oldLabel.remove();
+        document.getElementById('front-preview-img').style.display = '';
+    }
+
     const reader = new FileReader();
     reader.onload = function(e) {
         const img = new Image();
         img.onload = function() {
-            // 長辺をMAX_SIZEに制限
             let w = img.width, h = img.height;
             if (Math.max(w, h) > MAX_SIZE) {
                 if (w > h) {
@@ -108,16 +146,13 @@ function handleImage(input, side) {
                     h = MAX_SIZE;
                 }
             }
-
             const canvas = document.createElement('canvas');
             canvas.width = w;
             canvas.height = h;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, w, h);
-
             canvas.toBlob(function(blob) {
-                compressedImages[side] = blob;
-                // プレビュー表示
+                preparedFiles[side] = blob;
                 const previewDiv = document.getElementById(side + '-preview');
                 const previewImg = document.getElementById(side + '-preview-img');
                 previewImg.src = URL.createObjectURL(blob);
@@ -129,12 +164,12 @@ function handleImage(input, side) {
     reader.readAsDataURL(file);
 }
 
-// フォーム送信を横取りして、縮小済み画像をFormDataで送る
+// フォーム送信を横取りして、処理済みファイルをFormDataで送る
 document.getElementById('upload-form').addEventListener('submit', function(e) {
     e.preventDefault();
 
-    if (!compressedImages.front) {
-        alert('表面の画像を選択してください。');
+    if (!preparedFiles.front) {
+        alert('表面の画像またはPDFを選択してください。');
         return;
     }
 
@@ -142,11 +177,18 @@ document.getElementById('upload-form').addEventListener('submit', function(e) {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>読取中...（しばらくお待ちください）';
 
-    // FormDataを手動構築
     const fd = new FormData();
-    fd.append('front_image', compressedImages.front, 'front.jpg');
-    if (compressedImages.back) {
-        fd.append('back_image', compressedImages.back, 'back.jpg');
+    if (isPdf.front) {
+        fd.append('front_image', preparedFiles.front, preparedFiles.front.name);
+    } else {
+        fd.append('front_image', preparedFiles.front, 'front.jpg');
+    }
+    if (preparedFiles.back && !isPdf.front) {
+        if (isPdf.back) {
+            fd.append('back_image', preparedFiles.back, preparedFiles.back.name);
+        } else {
+            fd.append('back_image', preparedFiles.back, 'back.jpg');
+        }
     }
     fd.append('visibility', this.querySelector('[name=visibility]').value);
 
@@ -155,7 +197,6 @@ document.getElementById('upload-form').addEventListener('submit', function(e) {
         body: fd,
         redirect: 'follow',
     }).then(function(resp) {
-        // サーバーからのリダイレクト先に遷移
         window.location.href = resp.url;
     }).catch(function(err) {
         alert('アップロードに失敗しました: ' + err.message);
