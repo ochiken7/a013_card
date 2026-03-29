@@ -466,7 +466,8 @@ def update_card(card_id):
     if card.registered_by != current_user.id and not current_user.is_admin:
         abort(403)
 
-    # 会社マッチング
+    # 会社マッチング（変更前のIDを記録）
+    old_company_id = card.company_id
     company_name_ja = request.form.get("company_name_ja", "").strip()
     company_name_kana = request.form.get("company_name_kana", "").strip()
     card.company_id = match_or_create_company(company_name_ja, company_name_kana or None)
@@ -524,9 +525,29 @@ def update_card(card_id):
                 sort_order=i,
             ))
 
+    # 会社が変わった場合、旧会社の名刺が0件なら自動削除
+    if old_company_id and old_company_id != card.company_id:
+        _cleanup_empty_company(old_company_id)
+
     db.session.commit()
     flash("名刺を更新しました。", "success")
     return redirect(url_for("cards.show_card", card_id=card.id))
+
+
+def _cleanup_empty_company(company_id):
+    """名刺が0件になった会社を自動削除する"""
+    if not company_id:
+        return
+    company = Company.query.get(company_id)
+    if not company:
+        return
+    remaining = Card.query.filter_by(company_id=company_id).count()
+    if remaining == 0:
+        # 統合先として参照されている場合はスキップ
+        merged_refs = Company.query.filter_by(merged_into_id=company_id).count()
+        if merged_refs == 0:
+            logger.info(f"会社自動削除: {company.name_ja} (ID:{company_id})")
+            db.session.delete(company)
 
 
 # ========== 名刺削除 ==========
@@ -539,6 +560,8 @@ def delete_card(card_id):
     if card.registered_by != current_user.id and not current_user.is_admin:
         abort(403)
 
+    company_id = card.company_id
+
     # R2の画像も削除
     for img in card.images:
         try:
@@ -547,6 +570,11 @@ def delete_card(card_id):
             logger.error(f"R2画像削除エラー: {e}")
 
     db.session.delete(card)
+    db.session.flush()
+
+    # 名刺が0件になった会社を自動削除
+    _cleanup_empty_company(company_id)
+
     db.session.commit()
     flash("名刺を削除しました。", "info")
     return redirect(url_for("cards.index"))
