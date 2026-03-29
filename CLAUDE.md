@@ -39,6 +39,8 @@
 | 画像保存 | Cloudflare R2（boto3でS3互換操作） |
 | OCR | Google Cloud Vision API（TEXT_DETECTION） |
 | 構造化 | Claude API（Haiku）でOCRテキスト→JSON変換 |
+| PDF変換 | PyMuPDF（fitz）でPDF→画像変換 |
+| 画像処理 | OpenCV（opencv-python-headless）で名刺検出・台形補正 |
 | フロントエンド | Jinja2 + Bootstrap 5 |
 | 認証 | Flask-Login |
 | スマホ対応 | PWA（manifest.json） |
@@ -64,7 +66,7 @@ updated_at TIMESTAMP
 ```
 id SERIAL PK
 name_ja VARCHAR(255) NOT NULL    -- 会社名（日本語）
-name_en VARCHAR(255)             -- 会社名（英語）
+name_kana VARCHAR(255)           -- 会社名（フリガナ）
 merged_into_id INTEGER FK→companies(id)  -- 統合先（NULLなら有効）
 created_at, updated_at TIMESTAMP
 ```
@@ -172,21 +174,26 @@ cards.name_kanji, cards.name_kana, card_phones.phone_number, companies.name_ja
 ## OCRパイプライン（方式A: Vision + Claude 2段階）
 
 ```
-画像アップロード
-  → PIL前処理（EXIF回転補正 + 長辺2048px制限 + JPEG品質85）
+画像/PDFアップロード
+  → [クライアント側] 画像はCanvas APIで長辺2048px・JPEG85%に縮小してから送信
+  → [クライアント側] PDFはそのまま送信（サーバー側で変換）
+  → [サーバー側] PDFの場合: PyMuPDF(fitz)で300dpi画像に変換（1ページ目=表面、2ページ目=裏面）
+  → OpenCV前処理（名刺検出→台形補正→自動回転）+ PIL（EXIF補正+リサイズ+JPEG変換）
   → Cloudflare R2に保存（boto3）
   → Google Cloud Vision API（TEXT_DETECTION）で全文字抽出
   → card_images.ocr_raw_text に生テキスト保存 ★重要：再処理用
   → Claude API (Haiku) でJSON構造化
   → 会社名マッチング（正規化して既存companiesと照合）
-  → 確認画面でユーザーが修正
+  → 確認画面でユーザーが修正（手動回転可能）
   → DB保存
 ```
 
 ### Claude API 構造化プロンプト（概要）
 - systemプロンプト: 「日本の名刺情報を構造化するアシスタント。読み取れた情報のみセット、推測禁止、nullを使う」
 - userプロンプト: 表面テキスト（＋裏面テキストがあれば追加）→ 指定JSON形式で出力
-- 出力JSON項目: company_name_ja, company_name_en, department, position, name_kanji, name_kana, name_romaji, phones[], emails[], qualifications[], zip_code, address, building, website, sns_info, back_business_memo, back_branch_memo
+- 出力JSON項目: company_name_ja, company_name_kana, department, position, name_kanji, name_kana, name_romaji, phones[], emails[], qualifications[], zip_code, address, building, website, sns_info, back_business_memo, back_branch_memo
+- name_kana: 漢字から推測して必ず生成する設定
+- company_name_kana: 法人格除外のカタカナ読み
 
 ### 会社名正規化
 - 全角スペース→半角、（株）→株式会社、連続スペース→1つ
@@ -260,7 +267,7 @@ a013_card/
 │   │       ├── __init__.py
 │   │       └── routes.py
 │   ├── services/
-│   │   ├── ocr.py         # Google Vision API呼び出し + 画像前処理
+│   │   ├── ocr.py         # Vision API + OpenCV前処理 + PDF変換(PyMuPDF)
 │   │   ├── structurer.py  # Claude API構造化（プロンプト定義含む）
 │   │   ├── r2.py          # Cloudflare R2操作（upload/download/presigned/delete）
 │   │   └── company_matcher.py  # 会社名正規化・マッチング
@@ -319,12 +326,23 @@ ssh -i "D:\VPS\ssh-knd.pem" vpsuser@a013.vpsk.net
 
 ---
 
-## 実装状況（2026-03-29 全Phase完了・デプロイ済み）
+## 実装状況（2026-03-29 社内リリース済み）
 
-### Phase 1: 基盤 ✅
-### Phase 2: コア機能 ✅
-### Phase 3: 拡張機能 ✅
-### Phase 4: 仕上げ・デプロイ ✅
+### Phase 1〜4: 基盤〜デプロイ ✅
+### カスタマイズ第1弾 ✅（2026-03-29）
+- companies.name_en → name_kana（フリガナ化）
+- OCRプロンプト更新（company_name_kana + name_kana必須生成）
+- OpenCV画像処理（名刺検出・台形補正・自動回転）
+- 確認画面での手動回転UI
+- クライアント側画像圧縮（Canvas API、Request Entity Too Large対策）
+- カメラ/写真選択ボタン分離
+- FABセンタリング修正
+- 一覧: 重複バッジ、五十音/アルファベットインデックスボタン
+- 一覧: 会社名・肩書の行分離（text-truncate対応）
+
+### カスタマイズ第2弾 ✅（2026-03-29）
+- PDF名刺データ対応（名刺登録+バッチ処理）
+- 名刺0件の会社を自動削除（delete_card / update_card時）
 
 ### 今後のカスタマイズ候補
 - PWAアイコン画像（icon-192.png, icon-512.png）の作成
@@ -332,6 +350,11 @@ ssh -i "D:\VPS\ssh-knd.pem" vpsuser@a013.vpsk.net
 - バッチ処理の非同期化（現在は同期で処理時間がかかる）
 - 検索インデックスの最適化（PostgreSQL側）
 - settings Blueprint に追加機能
+
+### 画像処理の現状と課題
+- OpenCVによる名刺検出（Otsu二値化+minAreaRect+透視変換）は実装済みだが、実際の写真での精度はユーザーから「うまくいっていない」と報告あり
+- 名刺の背景が白い場合など、コントラスト不足で検出が失敗するケースがある
+- 改善が必要な場合は_detect_card()を見直すこと
 
 ---
 
