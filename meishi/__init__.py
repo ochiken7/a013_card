@@ -24,8 +24,6 @@ def create_app():
     # モデルのimport（Alembicがテーブルを検出するため）
     from meishi.models import User, Company, Card, CardPhone, CardEmail  # noqa: F401
     from meishi.models import CardQualification, CardImage, Tag, CardTag  # noqa: F401
-    from meishi.models import BatchJob, BatchItem  # noqa: F401
-
     # Blueprint登録
     from meishi.blueprints.auth import auth_bp
     app.register_blueprint(auth_bp)
@@ -44,9 +42,6 @@ def create_app():
 
     from meishi.blueprints.settings import settings_bp
     app.register_blueprint(settings_bp)
-
-    from meishi.blueprints.batch import batch_bp
-    app.register_blueprint(batch_bp)
 
     # 初期管理者作成コマンド
     @app.cli.command("seed-admin")
