@@ -125,8 +125,8 @@ def structured_to_form_data(structured):
     return {
         "company_name_ja": structured.get("company_name_ja") or "",
         "company_name_kana": structured.get("company_name_kana") or "",
-        "department": structured.get("department") or "",
-        "position": structured.get("position") or "",
+        "department": "・".join(structured["department"]) if isinstance(structured.get("department"), list) else (structured.get("department") or ""),
+        "position": "・".join(structured["position"]) if isinstance(structured.get("position"), list) else (structured.get("position") or ""),
         "name_kanji": structured.get("name_kanji") or "",
         "name_kana": structured.get("name_kana") or "",
         "name_romaji": structured.get("name_romaji") or "",
