@@ -19,7 +19,9 @@ from meishi.models.tag import Tag, CardTag
 from meishi.services.r2 import (
     upload_image, download_image, generate_object_key, get_presigned_url, delete_image,
 )
-from meishi.services.ocr import preprocess_image, extract_text_from_image, pdf_to_images
+from meishi.services.ocr import (
+    preprocess_image, preprocess_image_light, extract_text_from_image, pdf_to_images,
+)
 from meishi.services.structurer import structure_card_data, structured_to_form_data
 from meishi.services.company_matcher import match_or_create_company
 
@@ -153,6 +155,7 @@ def create_card():
         return redirect(url_for("cards.new_card"))
 
     card_image_ids = []
+    original_keys = {}  # side → R2キー（元画像）
     front_text = ""
     back_text = ""
 
@@ -171,9 +174,13 @@ def create_card():
                 return redirect(url_for("cards.new_card"))
 
             # 1ページ目 = 表面
+            light_bytes = preprocess_image_light(page_images[0])
             front_bytes = preprocess_image(page_images[0])
             front_key = generate_object_key(current_user.id, "front", "front.jpg")
+            orig_key = front_key.replace("_front.", "_front_original.")
             upload_image(front_bytes, front_key)
+            upload_image(light_bytes, orig_key)
+            original_keys["front"] = orig_key
 
             try:
                 front_text = extract_text_from_image(front_bytes)
@@ -193,9 +200,13 @@ def create_card():
 
             # 2ページ目 = 裏面（あれば）
             if len(page_images) >= 2:
+                light_bytes_b = preprocess_image_light(page_images[1])
                 back_bytes = preprocess_image(page_images[1])
                 back_key = generate_object_key(current_user.id, "back", "back.jpg")
+                orig_key_b = back_key.replace("_back.", "_back_original.")
                 upload_image(back_bytes, back_key)
+                upload_image(light_bytes_b, orig_key_b)
+                original_keys["back"] = orig_key_b
 
                 try:
                     back_text = extract_text_from_image(back_bytes)
@@ -213,10 +224,14 @@ def create_card():
                 card_image_ids.append(back_image.id)
 
         else:
-            # === 画像処理（従来通り） ===
+            # === 画像処理 ===
+            light_bytes = preprocess_image_light(front_raw)
             front_bytes = preprocess_image(front_raw)
             front_key = generate_object_key(current_user.id, "front", front_file.filename)
+            orig_key = front_key.replace("_front.", "_front_original.")
             upload_image(front_bytes, front_key)
+            upload_image(light_bytes, orig_key)
+            original_keys["front"] = orig_key
 
             try:
                 front_text = extract_text_from_image(front_bytes)
@@ -236,9 +251,14 @@ def create_card():
 
             # 裏面（あれば）
             if back_file and back_file.filename:
-                back_bytes = preprocess_image(back_file.read())
+                back_raw = back_file.read()
+                light_bytes_b = preprocess_image_light(back_raw)
+                back_bytes = preprocess_image(back_raw)
                 back_key = generate_object_key(current_user.id, "back", back_file.filename)
+                orig_key_b = back_key.replace("_back.", "_back_original.")
                 upload_image(back_bytes, back_key)
+                upload_image(light_bytes_b, orig_key_b)
+                original_keys["back"] = orig_key_b
 
                 try:
                     back_text = extract_text_from_image(back_bytes)
@@ -276,6 +296,7 @@ def create_card():
     session["ocr_data"] = {
         "structured": structured,
         "card_image_ids": card_image_ids,
+        "original_keys": original_keys,
         "visibility": visibility,
         "front_text": front_text,
         "back_text": back_text,
@@ -308,6 +329,8 @@ def confirm_card():
             except Exception:
                 image_urls.append({"id": img.id, "side": img.side, "url": None})
 
+    has_originals = bool(ocr_data.get("original_keys"))
+
     return render_template(
         "cards/confirm.html",
         form_data=form_data,
@@ -315,7 +338,133 @@ def confirm_card():
         front_text=ocr_data.get("front_text", ""),
         back_text=ocr_data.get("back_text", ""),
         visibility=ocr_data.get("visibility", "shared"),
+        has_originals=has_originals,
     )
+
+
+@cards_bp.route("/cards/revert-image", methods=["POST"])
+@login_required
+def revert_image():
+    """処理済み画像を元画像に差し替える"""
+    ocr_data = session.get("ocr_data")
+    if not ocr_data:
+        return jsonify({"ok": False, "error": "セッション切れ"}), 400
+
+    data = request.get_json()
+    side = data.get("side")  # "front" or "back"
+    original_keys = ocr_data.get("original_keys", {})
+    orig_key = original_keys.get(side)
+    if not orig_key:
+        return jsonify({"ok": False, "error": "元画像がありません"}), 400
+
+    # 対応するCardImageを取得
+    img_id = None
+    for cid in ocr_data.get("card_image_ids", []):
+        img = CardImage.query.get(cid)
+        if img and img.side == side:
+            img_id = cid
+            break
+
+    if not img or not img_id:
+        return jsonify({"ok": False, "error": "画像が見つかりません"}), 400
+
+    try:
+        # 元画像をダウンロードして処理済みキーに上書き
+        orig_bytes = download_image(orig_key)
+        upload_image(orig_bytes, img.r2_object_key)
+
+        # OCR再実行
+        try:
+            new_text = extract_text_from_image(orig_bytes)
+        except Exception:
+            new_text = img.ocr_raw_text or ""
+
+        img.ocr_raw_text = new_text
+        db.session.commit()
+
+        # セッションのOCRテキストも更新
+        if side == "front":
+            ocr_data["front_text"] = new_text
+        else:
+            ocr_data["back_text"] = new_text
+
+        # 構造化を再実行
+        front_text = ocr_data.get("front_text", "")
+        back_text = ocr_data.get("back_text", "")
+        if front_text:
+            try:
+                ocr_data["structured"] = structure_card_data(front_text, back_text or None)
+            except Exception:
+                pass
+        session["ocr_data"] = ocr_data
+
+        url = get_presigned_url(img.r2_object_key)
+        form_data = structured_to_form_data(ocr_data.get("structured", {}))
+        return jsonify({"ok": True, "url": url, "form_data": form_data})
+    except Exception as e:
+        logger.error(f"元画像差し替えエラー: {e}")
+        return jsonify({"ok": False, "error": "処理に失敗しました"}), 500
+
+
+@cards_bp.route("/cards/reprocess-image", methods=["POST"])
+@login_required
+def reprocess_image():
+    """元画像からOpenCV処理を再実行して差し替える"""
+    ocr_data = session.get("ocr_data")
+    if not ocr_data:
+        return jsonify({"ok": False, "error": "セッション切れ"}), 400
+
+    data = request.get_json()
+    side = data.get("side")
+    original_keys = ocr_data.get("original_keys", {})
+    orig_key = original_keys.get(side)
+    if not orig_key:
+        return jsonify({"ok": False, "error": "元画像がありません"}), 400
+
+    img = None
+    for cid in ocr_data.get("card_image_ids", []):
+        img = CardImage.query.get(cid)
+        if img and img.side == side:
+            break
+
+    if not img:
+        return jsonify({"ok": False, "error": "画像が見つかりません"}), 400
+
+    try:
+        # 元画像をダウンロードして再処理
+        orig_bytes = download_image(orig_key)
+        processed_bytes = preprocess_image(orig_bytes)
+        upload_image(processed_bytes, img.r2_object_key)
+
+        # OCR再実行
+        try:
+            new_text = extract_text_from_image(processed_bytes)
+        except Exception:
+            new_text = img.ocr_raw_text or ""
+
+        img.ocr_raw_text = new_text
+        db.session.commit()
+
+        if side == "front":
+            ocr_data["front_text"] = new_text
+        else:
+            ocr_data["back_text"] = new_text
+
+        front_text = ocr_data.get("front_text", "")
+        back_text = ocr_data.get("back_text", "")
+        if front_text:
+            try:
+                ocr_data["structured"] = structure_card_data(front_text, back_text or None)
+            except Exception:
+                pass
+        session["ocr_data"] = ocr_data
+
+        url = get_presigned_url(img.r2_object_key)
+        form_data = structured_to_form_data(ocr_data.get("structured", {}))
+        return jsonify({"ok": True, "url": url, "form_data": form_data})
+    except Exception as e:
+        logger.error(f"画像再処理エラー: {e}")
+        return jsonify({"ok": False, "error": "処理に失敗しました"}), 500
 
 
 @cards_bp.route("/cards/confirm", methods=["POST"])

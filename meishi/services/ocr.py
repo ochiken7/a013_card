@@ -134,6 +134,25 @@ def _auto_rotate(cv_img):
     return cv_img
 
 
+def preprocess_image_light(file_bytes):
+    """EXIF補正+リサイズのみの軽量前処理（元画像保存用）。
+    OpenCVによる名刺検出・台形補正はスキップする。
+    """
+    img = Image.open(io.BytesIO(file_bytes))
+    img = ImageOps.exif_transpose(img)
+
+    if img.mode in ("RGBA", "P"):
+        img = img.convert("RGB")
+
+    max_size = 2048
+    if max(img.size) > max_size:
+        img.thumbnail((max_size, max_size), Image.LANCZOS)
+
+    buffer = io.BytesIO()
+    img.save(buffer, format="JPEG", quality=85)
+    return buffer.getvalue()
+
+
 def preprocess_image(file_bytes):
     """Vision API精度向上のための画像前処理
     - EXIF回転補正（スマホ撮影対応）

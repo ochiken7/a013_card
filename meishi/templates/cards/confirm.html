@@ -32,6 +32,14 @@
                          class="img-fluid" alt="名刺{{ '表面' if img.side == 'front' else '裏面' }}"
                          style="max-height: 200px; object-fit: contain; transition: transform 0.3s;">
                 </div>
+                {% if has_originals %}
+                <div class="card-footer text-center py-1">
+                    <button type="button" class="btn btn-outline-warning btn-sm" id="revert-btn-{{ img.side }}"
+                            onclick="toggleOriginal('{{ img.side }}')">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>元画像を使う
+                    </button>
+                </div>
+                {% endif %}
                 {% else %}
                 <div class="card-body text-muted small">画像を読み込めません</div>
                 {% endif %}
@@ -70,6 +78,7 @@
 {% block scripts %}
 <script>
 const rotations = {};
+const isOriginal = {};  // side → true/false
 
 function rotateImage(side, degrees) {
     if (!rotations[side]) rotations[side] = 0;
@@ -78,6 +87,75 @@ function rotateImage(side, degrees) {
     const img = document.getElementById('img-' + side);
     if (img) {
         img.style.transform = 'rotate(' + rotations[side] + 'deg)';
+    }
+}
+
+function toggleOriginal(side) {
+    const btn = document.getElementById('revert-btn-' + side);
+    const img = document.getElementById('img-' + side);
+    if (!btn || !img) return;
+
+    btn.disabled = true;
+    const useOriginal = !isOriginal[side];
+    const endpoint = useOriginal
+        ? '{{ url_for("cards.revert_image") }}'
+        : '{{ url_for("cards.reprocess_image") }}';
+
+    fetch(endpoint, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({side: side}),
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            img.src = data.url;
+            isOriginal[side] = useOriginal;
+            if (useOriginal) {
+                btn.innerHTML = '<i class="bi bi-cpu me-1"></i>処理済み画像に戻す';
+                btn.classList.replace('btn-outline-warning', 'btn-outline-primary');
+            } else {
+                btn.innerHTML = '<i class="bi bi-arrow-counterclockwise me-1"></i>元画像を使う';
+                btn.classList.replace('btn-outline-primary', 'btn-outline-warning');
+            }
+            // フォームの値も更新
+            if (data.form_data) {
+                updateFormFields(data.form_data);
+            }
+        } else {
+            alert(data.error || '処理に失敗しました');
+        }
+        btn.disabled = false;
+    })
+    .catch(function(err) {
+        alert('通信エラー: ' + err.message);
+        btn.disabled = false;
+    });
+}
+
+function updateFormFields(fd) {
+    const fields = [
+        'company_name_ja', 'company_name_kana', 'department', 'position',
+        'name_kanji', 'name_kana', 'name_romaji',
+        'zip_code', 'address', 'building', 'website', 'sns_info',
+        'back_business_memo', 'back_branch_memo'
+    ];
+    for (const name of fields) {
+        const el = document.querySelector('[name="' + name + '"]');
+        if (el && fd[name] !== undefined) {
+            el.value = fd[name] || '';
+        }
+    }
+    // 電話番号・メール・資格は配列なので最初の入力欄のみ更新
+    const phoneInputs = document.querySelectorAll('[name="phone_number[]"]');
+    const phoneTypes = document.querySelectorAll('[name="phone_type[]"]');
+    if (fd.phones && fd.phones.length > 0 && phoneInputs.length > 0) {
+        phoneInputs[0].value = fd.phones[0].number || '';
+        if (phoneTypes[0]) phoneTypes[0].value = fd.phones[0].type || 'main';
+    }
+    const emailInputs = document.querySelectorAll('[name="email_address[]"]');
+    if (fd.emails && fd.emails.length > 0 && emailInputs.length > 0) {
+        emailInputs[0].value = fd.emails[0].address || '';
     }
 }
 </script>
