@@ -31,6 +31,10 @@
         <a class="nav-link {{ 'active' if filter_type == 'mine' }}"
            href="{{ url_for('cards.index', q=query, filter='mine') }}">自分のみ</a>
     </li>
+    <li class="nav-item">
+        <a class="nav-link {{ 'active' if filter_type == 'recent' }}"
+           href="{{ url_for('cards.index', q=query, filter='recent') }}">登録順</a>
+    </li>
 </ul>
 
 <p class="text-muted small mb-3">{{ total_count }}件</p>
@@ -58,8 +62,40 @@
 </div>
 {% endif %}
 
-<!-- 名刺リスト（アイウエオ順セクション） -->
-{% if sections %}
+<!-- 名刺リスト -->
+{% if flat_cards %}
+{# 登録順: フラットリスト #}
+<div class="list-group list-group-flush">
+    {% for card in flat_cards %}
+    <a href="{{ url_for('cards.show_card', card_id=card.id) }}"
+       class="list-group-item list-group-item-action d-flex align-items-center py-2">
+        <div class="rounded-circle bg-dark text-white d-flex align-items-center justify-content-center flex-shrink-0 me-3"
+             style="width: 40px; height: 40px; font-size: 0.9rem;">
+            {{ (card.name_kanji or '?')[0] }}
+        </div>
+        <div class="flex-grow-1" style="min-width: 0;">
+            <div class="fw-bold text-truncate">{{ card.name_kanji or '(氏名なし)' }}</div>
+            {% if card.company %}
+            <div class="text-muted small text-truncate">{{ card.company.name_ja }}</div>
+            {% endif %}
+            {% if card.position %}
+            <div class="text-muted small text-truncate">{{ card.position }}</div>
+            {% endif %}
+        </div>
+        <div class="text-end flex-shrink-0 ms-2">
+            {% if card.id in duplicate_ids %}
+            <span class="badge bg-warning text-dark">重複</span>
+            {% endif %}
+            {% if card.visibility == 'shared' %}
+            <span class="badge bg-info">共有</span>
+            {% endif %}
+            <div class="text-muted small">{{ card.created_at.strftime('%m/%d') }}</div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% elif sections %}
+{# アイウエオ順: セクション分けリスト #}
     {% for section_name, cards in sections.items() %}
     <div class="mb-3" id="section-{{ section_name if section_name != 'その他' else 'other' }}">
         <h6 class="text-muted border-bottom pb-1">{{ section_name }}</h6>
@@ -67,7 +103,6 @@
             {% for card in cards %}
             <a href="{{ url_for('cards.show_card', card_id=card.id) }}"
                class="list-group-item list-group-item-action d-flex align-items-center py-2">
-                <!-- イニシャルアバター -->
                 <div class="rounded-circle bg-dark text-white d-flex align-items-center justify-content-center flex-shrink-0 me-3"
                      style="width: 40px; height: 40px; font-size: 0.9rem;">
                     {{ (card.name_kanji or '?')[0] }}

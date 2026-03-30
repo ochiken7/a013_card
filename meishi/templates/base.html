@@ -51,9 +51,6 @@
                 <a class="nav-link text-white px-3 py-2" href="{{ url_for('cards.index') }}">
                     <i class="bi bi-card-list me-2"></i>名刺一覧
                 </a>
-                <a class="nav-link text-white px-3 py-2" href="{{ url_for('cards.new_card') }}">
-                    <i class="bi bi-plus-circle me-2"></i>名刺登録
-                </a>
                 <a class="nav-link text-white px-3 py-2" href="{{ url_for('companies.index') }}">
                     <i class="bi bi-building me-2"></i>会社一覧
                 </a>
@@ -72,6 +69,12 @@
                 <hr class="border-secondary mx-3 my-1">
                 <a class="nav-link text-white px-3 py-2" href="{{ url_for('settings.index') }}">
                     <i class="bi bi-gear me-2"></i>設定
+                </a>
+                <hr class="border-secondary mx-3 my-1">
+                <a class="nav-link px-3 py-2 mx-3 mb-2 rounded text-center"
+                   href="{{ url_for('cards.new_card') }}"
+                   style="background-color: #0d6efd; color: #fff;">
+                    <i class="bi bi-plus-circle me-1"></i>名刺を登録
                 </a>
             </nav>
         </div>

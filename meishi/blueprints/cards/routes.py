@@ -44,6 +44,14 @@ def index():
         cards_query = cards_query.filter(Card.registered_by == current_user.id)
     elif filter_type == "shared":
         cards_query = cards_query.filter(Card.visibility == "shared")
+    elif filter_type == "recent":
+        # 登録順: 全カード（自分+共有）を新しい順
+        cards_query = cards_query.filter(
+            or_(
+                Card.registered_by == current_user.id,
+                Card.visibility == "shared",
+            )
+        )
     else:
         # 全て: 自分のカード + 共有カード
         cards_query = cards_query.filter(
@@ -65,11 +73,14 @@ def index():
             )
         )
 
-    # フリガナのアイウエオ順 → 名前順
-    cards_query = cards_query.order_by(
-        Card.name_kana.asc().nullslast(),
-        Card.name_kanji.asc().nullslast(),
-    )
+    # ソート
+    if filter_type == "recent":
+        cards_query = cards_query.order_by(Card.created_at.desc())
+    else:
+        cards_query = cards_query.order_by(
+            Card.name_kana.asc().nullslast(),
+            Card.name_kanji.asc().nullslast(),
+        )
 
     cards = cards_query.all()
 
@@ -84,6 +95,19 @@ def index():
         key = (card.company_id, card.name_kanji)
         if card.company_id and card.name_kanji and dup_counter[key] > 1:
             duplicate_ids.add(card.id)
+
+    # 登録順の場合はセクション分けしない
+    if filter_type == "recent":
+        return render_template(
+            "cards/index.html",
+            sections={},
+            all_sections=[],
+            flat_cards=cards,
+            duplicate_ids=duplicate_ids,
+            query=query,
+            filter_type=filter_type,
+            total_count=len(cards),
+        )
 
     # アイウエオ順セクション分け
     sections = {}
@@ -102,6 +126,7 @@ def index():
         "cards/index.html",
         sections=sections,
         all_sections=all_sections,
+        flat_cards=[],
         duplicate_ids=duplicate_ids,
         query=query,
         filter_type=filter_type,
