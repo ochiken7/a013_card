@@ -16,7 +16,6 @@ class User(UserMixin, db.Model):
 
     # リレーション
     cards = db.relationship("Card", backref="registrant", foreign_keys="Card.registered_by")
-    batch_jobs = db.relationship("BatchJob", backref="creator", foreign_keys="BatchJob.created_by")
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
