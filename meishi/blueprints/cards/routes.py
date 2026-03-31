@@ -122,10 +122,17 @@ def index():
     # インデックスボタン用: 存在するセクション一覧
     all_sections = list(sections.keys())
 
+    # 各カードのフリガナ先頭文字を集める（ボタンのハイライト用）
+    all_kana_chars = set()
+    for card in cards:
+        if card.name_kana:
+            all_kana_chars.add(card.name_kana[0])
+
     return render_template(
         "cards/index.html",
         sections=sections,
         all_sections=all_sections,
+        all_kana_chars=all_kana_chars,
         flat_cards=[],
         duplicate_ids=duplicate_ids,
         query=query,

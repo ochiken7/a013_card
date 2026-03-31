@@ -39,25 +39,25 @@
 
 <p class="text-muted small mb-3">{{ total_count }}件</p>
 
-<!-- インデックスボタン -->
+<!-- インデックスボタン（全文字） -->
 {% if sections %}
 <div class="d-flex flex-wrap gap-1 mb-3">
-    {% set kana_labels = ['ア','カ','サ','タ','ナ','ハ','マ','ヤ','ラ','ワ'] %}
+    {% set kana_all = ['ア','イ','ウ','エ','オ','カ','キ','ク','ケ','コ','サ','シ','ス','セ','ソ','タ','チ','ツ','テ','ト','ナ','ニ','ヌ','ネ','ノ','ハ','ヒ','フ','ヘ','ホ','マ','ミ','ム','メ','モ','ヤ','ユ','ヨ','ラ','リ','ル','レ','ロ','ワ'] %}
     {% set alpha_labels = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' %}
-    {% for label in kana_labels %}
-        {% if label in all_sections %}
-        <a href="#section-{{ label }}" class="btn btn-outline-dark btn-sm">{{ label }}</a>
+    {% for label in kana_all %}
+        {% if label in all_kana_chars %}
+        <a href="#kana-{{ label }}" class="btn btn-outline-dark btn-sm px-2">{{ label }}</a>
         {% else %}
-        <span class="btn btn-outline-secondary btn-sm disabled">{{ label }}</span>
+        <span class="btn btn-outline-secondary btn-sm px-2 disabled">{{ label }}</span>
         {% endif %}
     {% endfor %}
     {% for letter in alpha_labels %}
         {% if letter in all_sections %}
-        <a href="#section-{{ letter }}" class="btn btn-outline-dark btn-sm">{{ letter }}</a>
+        <a href="#section-{{ letter }}" class="btn btn-outline-dark btn-sm px-2">{{ letter }}</a>
         {% endif %}
     {% endfor %}
     {% if 'その他' in all_sections %}
-    <a href="#section-other" class="btn btn-outline-dark btn-sm">他</a>
+    <a href="#section-other" class="btn btn-outline-dark btn-sm px-2">他</a>
     {% endif %}
 </div>
 {% endif %}
@@ -96,13 +96,16 @@
 </div>
 {% elif sections %}
 {# アイウエオ順: セクション分けリスト #}
+    {% set seen_kana = [] %}
     {% for section_name, cards in sections.items() %}
     <div class="mb-3" id="section-{{ section_name if section_name != 'その他' else 'other' }}">
         <h6 class="text-muted border-bottom pb-1">{{ section_name }}</h6>
         <div class="list-group list-group-flush">
             {% for card in cards %}
+            {% set first_char = card.name_kana[0] if card.name_kana else '' %}
             <a href="{{ url_for('cards.show_card', card_id=card.id) }}"
-               class="list-group-item list-group-item-action d-flex align-items-center py-2">
+               class="list-group-item list-group-item-action d-flex align-items-center py-2"
+               {% if first_char and first_char not in seen_kana %}id="kana-{{ first_char }}"{% if seen_kana.append(first_char) %}{% endif %}{% endif %}>
                 <div class="rounded-circle bg-dark text-white d-flex align-items-center justify-content-center flex-shrink-0 me-3"
                      style="width: 40px; height: 40px; font-size: 0.9rem;">
                     {{ (card.name_kanji or '?')[0] }}
