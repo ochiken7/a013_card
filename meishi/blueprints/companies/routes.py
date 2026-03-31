@@ -160,6 +160,8 @@ def change_id(company_id):
         return redirect(url_for("companies.company_cards", company_id=company_id))
 
     company = Company.query.get_or_404(company_id)
+    # セッションから切り離す（生SQLでID変更するとORM側と矛盾するため）
+    db.session.expunge(company)
 
     # SQL直接実行でID変更（FK制約のため順序が重要）
     # 1. cardsのcompany_idを更新
