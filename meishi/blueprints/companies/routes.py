@@ -95,7 +95,9 @@ def _position_sort_key(card):
 @login_required
 def company_cards(company_id):
     """会社に属する名刺一覧（役職順）"""
-    company = Company.query.get_or_404(company_id)
+    company = Company.query.get(company_id)
+    if not company:
+        return render_template("companies/not_found.html", company_id=company_id), 404
     cards = Card.query.filter_by(company_id=company_id).all()
     cards.sort(key=_position_sort_key)
     return render_template("companies/cards.html", company=company, cards=cards)
