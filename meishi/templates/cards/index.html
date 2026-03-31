@@ -37,7 +37,20 @@
     </li>
 </ul>
 
-<p class="text-muted small mb-3">{{ total_count }}件</p>
+<!-- タグフィルター -->
+{% if all_tags %}
+<div class="mb-3 d-flex flex-wrap gap-1 align-items-center">
+    <span class="text-muted small me-1"><i class="bi bi-tags"></i></span>
+    <a href="{{ url_for('cards.index', q=query, filter=filter_type) }}"
+       class="btn btn-sm {{ 'btn-dark' if not tag_filter else 'btn-outline-dark' }} px-2 py-0">すべて</a>
+    {% for tag in all_tags %}
+    <a href="{{ url_for('cards.index', q=query, filter=filter_type, tag=tag.name) }}"
+       class="btn btn-sm {{ 'btn-dark' if tag_filter == tag.name else 'btn-outline-dark' }} px-2 py-0">{{ tag.name }}</a>
+    {% endfor %}
+</div>
+{% endif %}
+
+<p class="text-muted small mb-3">{{ total_count }}件{% if tag_filter %} (タグ: {{ tag_filter }}){% endif %}</p>
 
 <!-- インデックスボタン（折りたたみ） -->
 {% if sections %}

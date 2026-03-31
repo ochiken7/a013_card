@@ -1,4 +1,4 @@
-"""ユーザー管理（管理者のみ）"""
+"""ユーザー管理・タグ管理（管理者のみ）"""
 
 from functools import wraps
 from flask import render_template, redirect, url_for, flash, request, abort
@@ -6,6 +6,7 @@ from flask_login import login_required, current_user
 from meishi import db
 from meishi.blueprints.admin import admin_bp
 from meishi.models.user import User
+from meishi.models.tag import Tag, CardTag
 
 
 def admin_required(f):
@@ -85,3 +86,73 @@ def toggle_admin(user_id):
     status = "付与" if user.is_admin else "解除"
     flash(f"「{user.display_name}」の管理者権限を{status}しました。", "success")
     return redirect(url_for("admin.user_list"))
+
+
+# ========== タグ管理 ==========
+
+@admin_bp.route("/admin/tags")
+@admin_required
+def tag_list():
+    """タグ一覧"""
+    tags = Tag.query.order_by(Tag.name).all()
+    # 各タグの使用数を取得
+    tag_counts = {}
+    for tag in tags:
+        tag_counts[tag.id] = CardTag.query.filter_by(tag_id=tag.id).count()
+    return render_template("admin/tags.html", tags=tags, tag_counts=tag_counts)
+
+
+@admin_bp.route("/admin/tags/new", methods=["POST"])
+@admin_required
+def create_tag():
+    """タグ新規作成"""
+    name = request.form.get("name", "").strip()
+    if not name:
+        flash("タグ名を入力してください。", "danger")
+        return redirect(url_for("admin.tag_list"))
+
+    if Tag.query.filter_by(name=name).first():
+        flash("このタグ名は既に登録されています。", "danger")
+        return redirect(url_for("admin.tag_list"))
+
+    tag = Tag(name=name)
+    db.session.add(tag)
+    db.session.commit()
+    flash(f"タグ「{name}」を作成しました。", "success")
+    return redirect(url_for("admin.tag_list"))
+
+
+@admin_bp.route("/admin/tags/<int:tag_id>/edit", methods=["POST"])
+@admin_required
+def edit_tag(tag_id):
+    """タグ名変更"""
+    tag = Tag.query.get_or_404(tag_id)
+    new_name = request.form.get("name", "").strip()
+    if not new_name:
+        flash("タグ名を入力してください。", "danger")
+        return redirect(url_for("admin.tag_list"))
+
+    existing = Tag.query.filter_by(name=new_name).first()
+    if existing and existing.id != tag.id:
+        flash("このタグ名は既に使われています。", "danger")
+        return redirect(url_for("admin.tag_list"))
+
+    old_name = tag.name
+    tag.name = new_name
+    db.session.commit()
+    flash(f"タグ「{old_name}」→「{new_name}」に変更しました。", "success")
+    return redirect(url_for("admin.tag_list"))
+
+
+@admin_bp.route("/admin/tags/<int:tag_id>/delete", methods=["POST"])
+@admin_required
+def delete_tag(tag_id):
+    """タグ削除（紐付けも解除）"""
+    tag = Tag.query.get_or_404(tag_id)
+    name = tag.name
+    # card_tagsの紐付けも削除
+    CardTag.query.filter_by(tag_id=tag.id).delete()
+    db.session.delete(tag)
+    db.session.commit()
+    flash(f"タグ「{name}」を削除しました。", "info")
+    return redirect(url_for("admin.tag_list"))

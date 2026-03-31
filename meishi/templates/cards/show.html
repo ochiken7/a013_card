@@ -15,6 +15,17 @@
         <a href="{{ url_for('cards.edit_card', card_id=card.id) }}" class="btn btn-outline-dark btn-sm">
             <i class="bi bi-pencil"></i> 編集
         </a>
+        <form method="post" action="{{ url_for('cards.toggle_archive', card_id=card.id) }}">
+            {% if card.is_archived %}
+            <button type="submit" class="btn btn-outline-success btn-sm" title="アーカイブから戻す">
+                <i class="bi bi-arrow-counterclockwise"></i> 戻す
+            </button>
+            {% else %}
+            <button type="submit" class="btn btn-outline-secondary btn-sm" title="アーカイブ">
+                <i class="bi bi-archive"></i>
+            </button>
+            {% endif %}
+        </form>
         <form method="post" action="{{ url_for('cards.delete_card', card_id=card.id) }}"
               onsubmit="return confirm('この名刺を削除しますか？')">
             <button type="submit" class="btn btn-outline-danger btn-sm">
@@ -180,7 +191,12 @@
         </div>
         <form class="d-flex gap-2" onsubmit="addTag({{ card.id }}); return false;">
             <input type="text" id="new-tag-input" class="form-control form-control-sm"
-                   placeholder="タグ名を入力..." autocomplete="off">
+                   placeholder="タグ名を入力..." autocomplete="off" list="tag-suggestions">
+            <datalist id="tag-suggestions">
+                {% for tag in all_tags %}
+                <option value="{{ tag.name }}">
+                {% endfor %}
+            </datalist>
             <button type="submit" class="btn btn-outline-dark btn-sm flex-shrink-0">
                 <i class="bi bi-plus"></i>追加
             </button>

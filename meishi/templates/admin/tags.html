@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}タグ管理 - 名刺管理{% endblock %}
+
+{% block content %}
+<h5 class="mb-3"><i class="bi bi-tags me-1"></i>タグ管理</h5>
+
+<!-- 新規タグ追加 -->
+<form method="post" action="{{ url_for('admin.create_tag') }}" class="d-flex gap-2 mb-4">
+    <input type="text" name="name" class="form-control" placeholder="新しいタグ名" required>
+    <button type="submit" class="btn btn-dark flex-shrink-0">
+        <i class="bi bi-plus-circle me-1"></i>追加
+    </button>
+</form>
+
+<!-- タグ一覧 -->
+{% if tags %}
+<div class="list-group">
+    {% for tag in tags %}
+    <div class="list-group-item d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-2 flex-grow-1">
+            <span class="badge bg-dark">{{ tag.name }}</span>
+            <span class="text-muted small">{{ tag_counts.get(tag.id, 0) }}件の名刺</span>
+        </div>
+        <div class="d-flex gap-1">
+            <!-- 編集 -->
+            <button type="button" class="btn btn-outline-dark btn-sm"
+                    onclick="editTag({{ tag.id }}, '{{ tag.name }}')">
+                <i class="bi bi-pencil"></i>
+            </button>
+            <!-- 削除 -->
+            <form method="post" action="{{ url_for('admin.delete_tag', tag_id=tag.id) }}"
+                  onsubmit="return confirm('タグ「{{ tag.name }}」を削除しますか？\n紐付けられた名刺からも外れます。')">
+                <button type="submit" class="btn btn-outline-danger btn-sm">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+    <i class="bi bi-tags" style="font-size: 3rem;"></i>
+    <p class="mt-2">タグがまだ登録されていません。</p>
+</div>
+{% endif %}
+
+<!-- 編集モーダル -->
+<div class="modal fade" id="editTagModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="editTagForm" method="post">
+                <div class="modal-header">
+                    <h6 class="modal-title">タグ名を変更</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="text" name="name" id="editTagName" class="form-control" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="submit" class="btn btn-dark btn-sm">変更</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function editTag(tagId, currentName) {
+    document.getElementById('editTagForm').action = `/admin/tags/${tagId}/edit`;
+    document.getElementById('editTagName').value = currentName;
+    new bootstrap.Modal(document.getElementById('editTagModal')).show();
+}
+</script>
+{% endblock %}

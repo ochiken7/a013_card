@@ -51,6 +51,9 @@
                 <a class="nav-link text-white px-3 py-2" href="{{ url_for('cards.index') }}">
                     <i class="bi bi-card-list me-2"></i>名刺一覧
                 </a>
+                <a class="nav-link text-white px-3 py-2" href="{{ url_for('cards.archived_cards') }}">
+                    <i class="bi bi-archive me-2"></i>アーカイブ
+                </a>
                 <a class="nav-link text-white px-3 py-2" href="{{ url_for('companies.index') }}">
                     <i class="bi bi-building me-2"></i>会社一覧
                 </a>
@@ -64,6 +67,9 @@
                 <hr class="border-secondary mx-3 my-1">
                 <a class="nav-link text-white px-3 py-2" href="{{ url_for('admin.user_list') }}">
                     <i class="bi bi-people me-2"></i>ユーザー管理
+                </a>
+                <a class="nav-link text-white px-3 py-2" href="{{ url_for('admin.tag_list') }}">
+                    <i class="bi bi-tags me-2"></i>タグ管理
                 </a>
                 {% endif %}
                 <hr class="border-secondary mx-3 my-1">

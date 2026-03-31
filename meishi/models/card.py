@@ -30,6 +30,7 @@ class Card(db.Model):
 
     # 管理
     visibility = db.Column(db.String(20), nullable=False, default="private")
+    is_archived = db.Column(db.Boolean, nullable=False, default=False, server_default="false")
     memo = db.Column(db.Text)
     created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
     updated_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now(), onupdate=db.func.now())

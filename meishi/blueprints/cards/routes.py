@@ -36,8 +36,9 @@ def index():
     """名刺一覧（検索・フィルター対応）"""
     query = request.args.get("q", "").strip()
     filter_type = request.args.get("filter", "all")  # all / shared / mine
+    tag_filter = request.args.get("tag", "").strip()
 
-    cards_query = Card.query
+    cards_query = Card.query.filter(Card.is_archived == False)  # noqa: E712
 
     # フィルター
     if filter_type == "mine":
@@ -73,6 +74,10 @@ def index():
             )
         )
 
+    # タグフィルター
+    if tag_filter:
+        cards_query = cards_query.filter(Card.tags.any(Tag.name == tag_filter))
+
     # ソート
     if filter_type == "recent":
         cards_query = cards_query.order_by(Card.created_at.desc())
@@ -96,6 +101,9 @@ def index():
         if card.company_id and card.name_kanji and dup_counter[key] > 1:
             duplicate_ids.add(card.id)
 
+    # タグ一覧（フィルタードロップダウン用）
+    all_tags = Tag.query.order_by(Tag.name).all()
+
     # 登録順の場合はセクション分けしない
     if filter_type == "recent":
         return render_template(
@@ -106,6 +114,8 @@ def index():
             duplicate_ids=duplicate_ids,
             query=query,
             filter_type=filter_type,
+            tag_filter=tag_filter,
+            all_tags=all_tags,
             total_count=len(cards),
         )
 
@@ -137,6 +147,8 @@ def index():
         duplicate_ids=duplicate_ids,
         query=query,
         filter_type=filter_type,
+        tag_filter=tag_filter,
+        all_tags=all_tags,
         total_count=len(cards),
     )
 
@@ -163,6 +175,44 @@ def _get_kana_section(char):
     if "A" <= upper <= "Z":
         return upper
     return "その他"
+
+
+# ========== アーカイブ一覧 ==========
+
+@cards_bp.route("/cards/archived")
+@login_required
+def archived_cards():
+    """アーカイブ済み名刺一覧"""
+    cards_query = Card.query.filter(Card.is_archived == True)  # noqa: E712
+    cards_query = cards_query.filter(
+        or_(
+            Card.registered_by == current_user.id,
+            Card.visibility == "shared",
+        )
+    )
+    cards = cards_query.order_by(Card.updated_at.desc()).all()
+    return render_template("cards/archived.html", cards=cards, total_count=len(cards))
+
+
+# ========== アーカイブ切替 ==========
+
+@cards_bp.route("/cards/<int:card_id>/archive", methods=["POST"])
+@login_required
+def toggle_archive(card_id):
+    """名刺のアーカイブ/アーカイブ解除"""
+    card = Card.query.get_or_404(card_id)
+    if card.registered_by != current_user.id and not current_user.is_admin:
+        abort(403)
+
+    card.is_archived = not card.is_archived
+    db.session.commit()
+
+    if card.is_archived:
+        flash("名刺をアーカイブしました。", "info")
+        return redirect(url_for("cards.index"))
+    else:
+        flash("名刺をアーカイブから戻しました。", "success")
+        return redirect(url_for("cards.show_card", card_id=card.id))
 
 
 # ========== 名刺登録 ==========
@@ -614,7 +664,8 @@ def show_card(card_id):
         except Exception:
             image_urls.append({"id": img.id, "side": img.side, "url": None})
 
-    return render_template("cards/show.html", card=card, image_urls=image_urls)
+    all_tags = Tag.query.order_by(Tag.name).all()
+    return render_template("cards/show.html", card=card, image_urls=image_urls, all_tags=all_tags)
 
 
 # ========== 名刺編集 ==========
