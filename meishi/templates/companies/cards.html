@@ -3,10 +3,31 @@
 {% block title %}{{ company.name_ja }} - 名刺管理{% endblock %}
 
 {% block content %}
-<h4 class="mb-1">{{ company.name_ja }}</h4>
-{% if company.name_kana %}
-<p class="text-muted small">{{ company.name_kana }}</p>
-{% endif %}
+<div class="d-flex justify-content-between align-items-start mb-1">
+    <div>
+        <h4 class="mb-1">{{ company.name_ja }}</h4>
+        {% if company.name_kana %}
+        <p class="text-muted small mb-0">{{ company.name_kana }}</p>
+        {% endif %}
+    </div>
+    <button class="btn btn-outline-secondary btn-sm" type="button"
+            data-bs-toggle="collapse" data-bs-target="#changeIdForm">
+        <i class="bi bi-pencil me-1"></i>ID変更
+    </button>
+</div>
+
+<!-- ID変更フォーム（折りたたみ） -->
+<div class="collapse mb-2" id="changeIdForm">
+    <form method="post" action="{{ url_for('companies.change_id', company_id=company.id) }}"
+          class="card card-body py-2" onsubmit="return confirm('会社IDを変更しますか？')">
+        <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small">現在のID: {{ company.id }}</span>
+            <input type="number" name="new_id" class="form-control form-control-sm" style="width: 100px;"
+                   min="1" placeholder="新しいID" required>
+            <button type="submit" class="btn btn-dark btn-sm">変更</button>
+        </div>
+    </form>
+</div>
 
 <p class="text-muted small">{{ cards|length }}件の名刺</p>
 

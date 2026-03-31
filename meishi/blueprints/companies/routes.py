@@ -70,12 +70,27 @@ def index():
     )
 
 
+def _position_sort_key(card):
+    """役職の優先度を返す（小さいほど上に表示）"""
+    position = card.position or ""
+    priority_list = [
+        "代表取締役",
+        "取締役",
+        "執行役員",
+    ]
+    for i, keyword in enumerate(priority_list):
+        if keyword in position:
+            return (i, card.name_kana or "")
+    return (len(priority_list), card.name_kana or "")
+
+
 @companies_bp.route("/companies/<int:company_id>/cards")
 @login_required
 def company_cards(company_id):
-    """会社に属する名刺一覧"""
+    """会社に属する名刺一覧（役職順）"""
     company = Company.query.get_or_404(company_id)
-    cards = Card.query.filter_by(company_id=company_id).order_by(Card.name_kana.asc()).all()
+    cards = Card.query.filter_by(company_id=company_id).all()
+    cards.sort(key=_position_sort_key)
     return render_template("companies/cards.html", company=company, cards=cards)
 
 
@@ -100,6 +115,49 @@ def merge():
 
     flash(f"「{source.name_ja}」を「{target.name_ja}」に統合しました。", "success")
     return redirect(url_for("companies.index"))
+
+
+@companies_bp.route("/companies/<int:company_id>/change-id", methods=["POST"])
+@login_required
+def change_id(company_id):
+    """会社IDを変更"""
+    new_id = request.form.get("new_id", type=int)
+    if not new_id or new_id < 1:
+        flash("正しいID（1以上の整数）を入力してください。", "danger")
+        return redirect(url_for("companies.company_cards", company_id=company_id))
+
+    if new_id == company_id:
+        flash("現在と同じIDです。", "warning")
+        return redirect(url_for("companies.company_cards", company_id=company_id))
+
+    # 既に使われていないか確認
+    existing = Company.query.get(new_id)
+    if existing:
+        flash(f"ID {new_id} は既に「{existing.name_ja}」で使われています。", "danger")
+        return redirect(url_for("companies.company_cards", company_id=company_id))
+
+    company = Company.query.get_or_404(company_id)
+
+    # SQL直接実行でID変更（FK制約のため順序が重要）
+    # 1. cardsのcompany_idを更新
+    db.session.execute(
+        db.text("UPDATE cards SET company_id = :new WHERE company_id = :old"),
+        {"new": new_id, "old": company_id},
+    )
+    # 2. companiesのmerged_into_idを更新
+    db.session.execute(
+        db.text("UPDATE companies SET merged_into_id = :new WHERE merged_into_id = :old"),
+        {"new": new_id, "old": company_id},
+    )
+    # 3. company自体のIDを更新
+    db.session.execute(
+        db.text("UPDATE companies SET id = :new WHERE id = :old"),
+        {"new": new_id, "old": company_id},
+    )
+    db.session.commit()
+
+    flash(f"会社IDを {company_id} → {new_id} に変更しました。", "success")
+    return redirect(url_for("companies.company_cards", company_id=new_id))
 
 
 @companies_bp.route("/companies/<int:company_id>/unmerge", methods=["POST"])
