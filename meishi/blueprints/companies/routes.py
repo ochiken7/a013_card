@@ -58,6 +58,12 @@ def index():
 
     all_sections = list(sections.keys())
 
+    # 各会社のフリガナ先頭文字を集める（ボタンのハイライト用）
+    all_kana_chars = set()
+    for company, _count in companies:
+        if company.name_kana:
+            all_kana_chars.add(company.name_kana[0])
+
     # 統合済みの会社
     merged = Company.query.filter(Company.merged_into_id.isnot(None)).all()
 
@@ -65,6 +71,7 @@ def index():
         "companies/index.html",
         sections=sections,
         all_sections=all_sections,
+        all_kana_chars=all_kana_chars,
         companies=companies,
         merged=merged,
     )
@@ -92,6 +99,22 @@ def company_cards(company_id):
     cards = Card.query.filter_by(company_id=company_id).all()
     cards.sort(key=_position_sort_key)
     return render_template("companies/cards.html", company=company, cards=cards)
+
+
+@companies_bp.route("/companies/merge", methods=["GET"])
+@login_required
+def merge_form():
+    """会社統合画面"""
+    companies = (
+        db.session.query(Company, func.count(Card.id).label("card_count"))
+        .outerjoin(Card, Card.company_id == Company.id)
+        .filter(Company.merged_into_id.is_(None))
+        .group_by(Company.id)
+        .order_by(Company.name_kana.asc().nullslast(), Company.name_ja.asc())
+        .all()
+    )
+    merged = Company.query.filter(Company.merged_into_id.isnot(None)).all()
+    return render_template("companies/merge.html", companies=companies, merged=merged)
 
 
 @companies_bp.route("/companies/merge", methods=["POST"])
