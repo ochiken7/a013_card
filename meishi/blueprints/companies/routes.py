@@ -163,22 +163,39 @@ def change_id(company_id):
     # セッションから切り離す（生SQLでID変更するとORM側と矛盾するため）
     db.session.expunge(company)
 
-    # SQL直接実行でID変更（FK制約のため順序が重要）
-    # 1. cardsのcompany_idを更新
-    db.session.execute(
-        db.text("UPDATE cards SET company_id = :new WHERE company_id = :old"),
-        {"new": new_id, "old": company_id},
-    )
-    # 2. companiesのmerged_into_idを更新
-    db.session.execute(
-        db.text("UPDATE companies SET merged_into_id = :new WHERE merged_into_id = :old"),
-        {"new": new_id, "old": company_id},
-    )
-    # 3. company自体のIDを更新
+    # FK制約を一時的にDEFERRABLEにしてからID変更
+    db.session.execute(db.text(
+        "ALTER TABLE cards ALTER CONSTRAINT cards_company_id_fkey DEFERRABLE INITIALLY DEFERRED"
+    ))
+    db.session.execute(db.text(
+        "ALTER TABLE companies ALTER CONSTRAINT companies_merged_into_id_fkey DEFERRABLE INITIALLY DEFERRED"
+    ))
+    db.session.execute(db.text("SET CONSTRAINTS ALL DEFERRED"))
+
+    # 1. company自体のIDを変更
     db.session.execute(
         db.text("UPDATE companies SET id = :new WHERE id = :old"),
         {"new": new_id, "old": company_id},
     )
+    # 2. cardsのcompany_idを更新
+    db.session.execute(
+        db.text("UPDATE cards SET company_id = :new WHERE company_id = :old"),
+        {"new": new_id, "old": company_id},
+    )
+    # 3. companiesのmerged_into_idを更新
+    db.session.execute(
+        db.text("UPDATE companies SET merged_into_id = :new WHERE merged_into_id = :old"),
+        {"new": new_id, "old": company_id},
+    )
+    db.session.commit()
+
+    # FK制約を元に戻す（IMMEDIATE）
+    db.session.execute(db.text(
+        "ALTER TABLE cards ALTER CONSTRAINT cards_company_id_fkey NOT DEFERRABLE"
+    ))
+    db.session.execute(db.text(
+        "ALTER TABLE companies ALTER CONSTRAINT companies_merged_into_id_fkey NOT DEFERRABLE"
+    ))
     db.session.commit()
 
     flash(f"会社IDを {company_id} → {new_id} に変更しました。", "success")
