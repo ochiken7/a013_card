@@ -619,6 +619,22 @@ def save_card():
                 sort_order=i,
             ))
 
+    # タグ自動付与（役職・部署・資格が既存タグと一致すれば付与）
+    existing_tags = {t.name: t for t in Tag.query.all()}
+    check_values = []
+    for field in [card.position, card.department]:
+        if field:
+            check_values.append(field)
+            # 「・」区切りの場合は個別にもチェック
+            if "・" in field:
+                check_values.extend(part.strip() for part in field.split("・") if part.strip())
+    check_values.extend(q.strip() for q in qualifications if q.strip())
+    for value in check_values:
+        if value in existing_tags:
+            tag = existing_tags[value]
+            if tag not in card.tags:
+                card.tags.append(tag)
+
     # 画像をカードに紐付け（回転があれば適用）
     for img_id in ocr_data.get("card_image_ids", []):
         img = CardImage.query.get(img_id)
