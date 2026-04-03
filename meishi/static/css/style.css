@@ -22,7 +22,8 @@
 }
 
 /* アンカージャンプ時のナビバー分オフセット */
-[id^="section-"] {
+[id^="section-"],
+[id^="kana-"] {
     scroll-margin-top: 70px;
 }
 
