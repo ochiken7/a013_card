@@ -13,12 +13,17 @@
     </button>
 </form>
 
+<p class="text-muted small mb-2"><i class="bi bi-grip-vertical me-1"></i>ドラッグで並び替えできます</p>
+
 <!-- タグ一覧 -->
 {% if tags %}
-<div class="list-group">
+<div class="list-group" id="tagList">
     {% for tag in tags %}
-    <div class="list-group-item d-flex justify-content-between align-items-center">
+    <div class="list-group-item d-flex justify-content-between align-items-center" data-tag-id="{{ tag.id }}">
         <div class="d-flex align-items-center gap-2 flex-grow-1">
+            <span class="drag-handle text-muted" style="cursor: grab; padding: 0 4px;">
+                <i class="bi bi-grip-vertical"></i>
+            </span>
             <span class="badge bg-dark">{{ tag.name }}</span>
             <span class="text-muted small">{{ tag_counts.get(tag.id, 0) }}件の名刺</span>
         </div>
@@ -75,5 +80,80 @@ function editTag(tagId, currentName) {
     document.getElementById('editTagName').value = currentName;
     new bootstrap.Modal(document.getElementById('editTagModal')).show();
 }
+
+// ドラッグ＆ドロップ並び替え
+(function() {
+    const list = document.getElementById('tagList');
+    if (!list) return;
+
+    let dragItem = null;
+    let placeholder = null;
+
+    list.addEventListener('pointerdown', function(e) {
+        const handle = e.target.closest('.drag-handle');
+        if (!handle) return;
+
+        e.preventDefault();
+        dragItem = handle.closest('.list-group-item');
+        dragItem.style.opacity = '0.5';
+
+        // プレースホルダー
+        placeholder = document.createElement('div');
+        placeholder.className = 'list-group-item bg-light';
+        placeholder.style.height = dragItem.offsetHeight + 'px';
+        placeholder.style.border = '2px dashed #ccc';
+
+        const onMove = function(ev) {
+            const y = ev.clientY;
+            const items = [...list.querySelectorAll('.list-group-item:not([style*="opacity"])')];
+            // プレースホルダーを除外
+            const realItems = items.filter(i => i !== placeholder);
+
+            let inserted = false;
+            for (const item of realItems) {
+                const rect = item.getBoundingClientRect();
+                if (y < rect.top + rect.height / 2) {
+                    list.insertBefore(placeholder, item);
+                    inserted = true;
+                    break;
+                }
+            }
+            if (!inserted) {
+                list.appendChild(placeholder);
+            }
+        };
+
+        const onUp = function() {
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup', onUp);
+
+            if (placeholder && placeholder.parentNode) {
+                list.insertBefore(dragItem, placeholder);
+                placeholder.remove();
+            }
+            dragItem.style.opacity = '';
+            dragItem = null;
+            placeholder = null;
+
+            // 新しい順序をサーバーに送信
+            saveOrder();
+        };
+
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+    });
+
+    function saveOrder() {
+        const ids = [...list.querySelectorAll('.list-group-item')].map(
+            el => parseInt(el.dataset.tagId)
+        ).filter(id => !isNaN(id));
+
+        fetch('{{ url_for("admin.reorder_tags") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({tag_ids: ids})
+        });
+    }
+})();
 </script>
 {% endblock %}

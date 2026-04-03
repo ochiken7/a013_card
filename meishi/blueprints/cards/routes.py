@@ -102,7 +102,7 @@ def index():
             duplicate_ids.add(card.id)
 
     # タグ一覧（フィルタードロップダウン用）
-    all_tags = Tag.query.order_by(Tag.name).all()
+    all_tags = Tag.query.order_by(Tag.sort_order, Tag.name).all()
 
     # 登録順の場合はセクション分けしない
     if filter_type == "recent":
@@ -680,7 +680,7 @@ def show_card(card_id):
         except Exception:
             image_urls.append({"id": img.id, "side": img.side, "url": None})
 
-    all_tags = Tag.query.order_by(Tag.name).all()
+    all_tags = Tag.query.order_by(Tag.sort_order, Tag.name).all()
     return render_template("cards/show.html", card=card, image_urls=image_urls, all_tags=all_tags)
 
 

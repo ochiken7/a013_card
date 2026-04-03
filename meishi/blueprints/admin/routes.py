@@ -1,7 +1,7 @@
 """ユーザー管理・タグ管理（管理者のみ）"""
 
 from functools import wraps
-from flask import render_template, redirect, url_for, flash, request, abort
+from flask import render_template, redirect, url_for, flash, request, abort, jsonify
 from flask_login import login_required, current_user
 from meishi import db
 from meishi.blueprints.admin import admin_bp
@@ -94,7 +94,7 @@ def toggle_admin(user_id):
 @admin_required
 def tag_list():
     """タグ一覧"""
-    tags = Tag.query.order_by(Tag.name).all()
+    tags = Tag.query.order_by(Tag.sort_order, Tag.name).all()
     # 各タグの使用数を取得
     tag_counts = {}
     for tag in tags:
@@ -115,7 +115,9 @@ def create_tag():
         flash("このタグ名は既に登録されています。", "danger")
         return redirect(url_for("admin.tag_list"))
 
-    tag = Tag(name=name)
+    # 既存タグの最大sort_orderの次に配置
+    max_order = db.session.query(db.func.max(Tag.sort_order)).scalar() or 0
+    tag = Tag(name=name, sort_order=max_order + 1)
     db.session.add(tag)
     db.session.commit()
     flash(f"タグ「{name}」を作成しました。", "success")
@@ -156,3 +158,19 @@ def delete_tag(tag_id):
     db.session.commit()
     flash(f"タグ「{name}」を削除しました。", "info")
     return redirect(url_for("admin.tag_list"))
+
+
+@admin_bp.route("/admin/tags/reorder", methods=["POST"])
+@admin_required
+def reorder_tags():
+    """タグの並び順を保存（Ajax）"""
+    tag_ids = request.json.get("tag_ids", [])
+    if not tag_ids:
+        return jsonify({"error": "タグIDが指定されていません"}), 400
+
+    for i, tag_id in enumerate(tag_ids):
+        tag = Tag.query.get(tag_id)
+        if tag:
+            tag.sort_order = i
+    db.session.commit()
+    return jsonify({"ok": True})
