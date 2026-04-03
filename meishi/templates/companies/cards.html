@@ -18,15 +18,30 @@
 
 <!-- ID変更フォーム（折りたたみ） -->
 <div class="collapse mb-2" id="changeIdForm">
-    <form method="post" action="{{ url_for('companies.change_id', company_id=company.id) }}"
-          class="card card-body py-2" onsubmit="return confirm('会社IDを変更しますか？')">
-        <div class="d-flex align-items-center gap-2">
-            <span class="text-muted small">現在のID: {{ company.id }}</span>
-            <input type="number" name="new_id" class="form-control form-control-sm" style="width: 100px;"
-                   min="1" placeholder="新しいID" required>
-            <button type="submit" class="btn btn-dark btn-sm">変更</button>
+    <div class="card card-body py-2">
+        <!-- 顧客システム検索 -->
+        <div class="mb-2">
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <input type="text" id="a001SearchInput" class="form-control form-control-sm"
+                       placeholder="顧客システムで会社名を検索..." value="{{ company.name_ja }}">
+                <button type="button" class="btn btn-outline-primary btn-sm flex-shrink-0" onclick="searchA001()">
+                    <i class="bi bi-search me-1"></i>検索
+                </button>
+            </div>
+            <div id="a001Results" class="small"></div>
         </div>
-    </form>
+        <hr class="my-2">
+        <!-- 手動ID入力 -->
+        <form method="post" action="{{ url_for('companies.change_id', company_id=company.id) }}"
+              onsubmit="return confirm('会社IDを変更しますか？')">
+            <div class="d-flex align-items-center gap-2">
+                <span class="text-muted small">現在のID: {{ company.id }}</span>
+                <input type="number" name="new_id" id="newIdInput" class="form-control form-control-sm" style="width: 100px;"
+                       min="1" placeholder="新しいID" required>
+                <button type="submit" class="btn btn-dark btn-sm">変更</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <p class="text-muted small">{{ cards|length }}件の名刺</p>
@@ -54,4 +69,56 @@
 <a href="{{ url_for('companies.index') }}" class="btn btn-outline-secondary btn-sm">
     <i class="bi bi-arrow-left me-1"></i>会社一覧に戻る
 </a>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function searchA001() {
+    const keyword = document.getElementById('a001SearchInput').value.trim();
+    if (!keyword) return;
+
+    const resultsDiv = document.getElementById('a001Results');
+    resultsDiv.innerHTML = '<span class="text-muted">検索中...</span>';
+
+    fetch(`/companies/search-a001?keyword=${encodeURIComponent(keyword)}`)
+        .then(r => r.json())
+        .then(clients => {
+            if (clients.length === 0) {
+                resultsDiv.innerHTML = '<span class="text-muted">一致する顧客が見つかりませんでした。</span>';
+                return;
+            }
+            let html = '<div class="list-group list-group-flush">';
+            clients.forEach(c => {
+                html += `<button type="button" class="list-group-item list-group-item-action py-1 d-flex justify-content-between align-items-center"
+                                 onclick="selectA001Id(${c.id})">
+                    <span><strong>${escapeHtml(c.name)}</strong>
+                        <span class="text-muted ms-1">${escapeHtml(c.kana || '')}</span></span>
+                    <span class="badge bg-primary">ID: ${c.id}</span>
+                </button>`;
+            });
+            html += '</div>';
+            resultsDiv.innerHTML = html;
+        })
+        .catch(() => {
+            resultsDiv.innerHTML = '<span class="text-danger">検索に失敗しました。</span>';
+        });
+}
+
+function selectA001Id(id) {
+    document.getElementById('newIdInput').value = id;
+    document.getElementById('a001Results').innerHTML =
+        `<span class="text-success"><i class="bi bi-check-circle me-1"></i>ID: ${id} を選択しました。「変更」ボタンで確定してください。</span>`;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Enter キーで検索
+document.getElementById('a001SearchInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); searchA001(); }
+});
+</script>
 {% endblock %}

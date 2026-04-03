@@ -27,5 +27,8 @@ class Config:
     # Claude API
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
+    # a001顧客システムAPI
+    A001_API_KEY = os.getenv("A001_API_KEY", "")
+
     # アップロード制限
     MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10MB

@@ -1,12 +1,13 @@
 """会社グルーピング管理"""
 
-from flask import render_template, redirect, url_for, flash, request
+from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required
 from sqlalchemy import func
 from meishi import db
 from meishi.blueprints.companies import companies_bp
 from meishi.models.company import Company
 from meishi.models.card import Card
+from meishi.services.a001_api import search_clients
 
 
 def _get_company_section(company):
@@ -217,3 +218,23 @@ def unmerge(company_id):
     db.session.commit()
     flash(f"「{company.name_ja}」の統合を解除しました。", "success")
     return redirect(url_for("companies.index"))
+
+
+@companies_bp.route("/companies/search-a001", methods=["GET"])
+@login_required
+def search_a001():
+    """a001顧客システムから会社名を検索（Ajax）"""
+    keyword = request.args.get("keyword", "").strip()
+    if not keyword:
+        return jsonify([])
+
+    clients = search_clients(keyword)
+    # 必要な情報だけ返す
+    results = []
+    for c in clients:
+        results.append({
+            "id": c.get("id"),
+            "name": c.get("cl_name", ""),
+            "kana": c.get("cl_kana", ""),
+        })
+    return jsonify(results)
