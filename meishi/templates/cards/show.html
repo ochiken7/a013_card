@@ -61,7 +61,7 @@
 <div class="card mb-3">
     <div class="card-body">
         {% if card.company %}
-        <div class="fw-bold"><i class="bi bi-building me-1"></i>{{ card.company.name_ja }}
+        <div class="fw-bold"><i class="bi bi-building me-1"></i><a href="{{ url_for('companies.company_cards', company_id=card.company.id) }}" class="text-decoration-none text-dark">{{ card.company.name_ja }}</a>
             {% if card.company.name_kana %}<span class="text-muted small ms-1">{{ card.company.name_kana }}</span>{% endif %}
         </div>
         {% endif %}
