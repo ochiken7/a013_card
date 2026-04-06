@@ -40,7 +40,6 @@
 <!-- タグフィルター -->
 {% if all_tags %}
 <div class="mb-3 d-flex flex-wrap gap-1 align-items-center">
-    <span class="text-muted small me-1">タグ:</span>
     <a href="{{ url_for('cards.index', q=query, filter=filter_type) }}"
        class="btn btn-sm {{ 'btn-dark' if not tag_filter else 'btn-outline-dark' }} px-2 py-0">すべて</a>
     {% for tag in all_tags %}
