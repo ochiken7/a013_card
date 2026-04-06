@@ -204,6 +204,35 @@
     </div>
 </div>
 
+<!-- 連絡先追加 -->
+<div class="d-flex gap-2 mb-3">
+    <a href="{{ url_for('cards.vcard', card_id=card.id) }}" class="btn btn-primary btn-sm">
+        <i class="bi bi-person-plus me-1"></i>連絡先に追加
+    </a>
+    <button type="button" class="btn btn-outline-primary btn-sm"
+            data-bs-toggle="modal" data-bs-target="#qrModal">
+        <i class="bi bi-qr-code me-1"></i>QRコード表示
+    </button>
+</div>
+
+<!-- QRコード表示モーダル -->
+<div class="modal fade" id="qrModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">スマホで読み取ってください</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                <div id="qrcode" class="d-inline-block"></div>
+                <p class="text-muted mt-3 mb-0 small">
+                    スマホのカメラで読み取ると<br>連絡先に追加できます
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- フッター情報 -->
 <div class="text-muted small mb-4">
     <i class="bi bi-clock me-1"></i>登録: {{ card.created_at.strftime('%Y/%m/%d %H:%M') }}
@@ -219,7 +248,25 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
+// QRコード生成（モーダル表示時に1回だけ）
+(function() {
+    const qrModal = document.getElementById('qrModal');
+    let qrGenerated = false;
+    qrModal.addEventListener('shown.bs.modal', function() {
+        if (qrGenerated) return;
+        const vcardUrl = window.location.origin + "{{ url_for('cards.vcard', card_id=card.id) }}";
+        new QRCode(document.getElementById('qrcode'), {
+            text: vcardUrl,
+            width: 256,
+            height: 256,
+            correctLevel: QRCode.CorrectLevel.M
+        });
+        qrGenerated = true;
+    });
+})();
+
 function addTag(cardId) {
     const input = document.getElementById('new-tag-input');
     const name = input.value.trim();

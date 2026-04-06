@@ -3,9 +3,10 @@
 import io
 import logging
 from PIL import Image as PILImage
+from urllib.parse import quote
 from flask import (
     render_template, redirect, url_for, flash, request,
-    session, abort, jsonify,
+    session, abort, jsonify, Response,
 )
 from flask_login import login_required, current_user
 from collections import Counter
@@ -887,3 +888,87 @@ def remove_tag(card_id, tag_id):
         db.session.commit()
 
     return jsonify({"ok": True})
+
+
+# ========== vCard ==========
+
+def _escape_vcard(text):
+    """vCard特殊文字のエスケープ"""
+    if not text:
+        return ""
+    return text.replace("\\", "\\\\").replace(",", "\\,").replace(";", "\\;").replace("\n", "\\n")
+
+
+@cards_bp.route("/cards/<int:card_id>/vcard.vcf")
+@login_required
+def vcard(card_id):
+    """vCardファイルを生成してダウンロード"""
+    card = Card.query.get_or_404(card_id)
+
+    lines = ["BEGIN:VCARD", "VERSION:3.0"]
+
+    # 氏名（1カラムなので姓名分割を試みる）
+    name = card.name_kanji or ""
+    name_escaped = _escape_vcard(name)
+    # スペース区切りで姓・名を分割（なければ姓のみ）
+    parts = name.split() if name else [""]
+    if len(parts) >= 2:
+        last = _escape_vcard(parts[0])
+        first = _escape_vcard(" ".join(parts[1:]))
+    else:
+        last = _escape_vcard(parts[0])
+        first = ""
+    lines.append(f"N:{last};{first};;;")
+    lines.append(f"FN:{name_escaped}")
+
+    # フリガナ（1カラム、スペースで姓名分割）
+    kana = card.name_kana or ""
+    if kana:
+        kana_parts = kana.split()
+        if len(kana_parts) >= 2:
+            lines.append(f"X-PHONETIC-LAST-NAME:{_escape_vcard(kana_parts[0])}")
+            lines.append(f"X-PHONETIC-FIRST-NAME:{_escape_vcard(' '.join(kana_parts[1:]))}")
+        else:
+            lines.append(f"X-PHONETIC-LAST-NAME:{_escape_vcard(kana_parts[0])}")
+
+    # 会社・部署
+    if card.company:
+        org = _escape_vcard(card.company.name_ja or "")
+        if card.department:
+            org += f";{_escape_vcard(card.department)}"
+        lines.append(f"ORG:{org}")
+        if card.company.name_kana:
+            lines.append(f"X-PHONETIC-ORG:{_escape_vcard(card.company.name_kana)}")
+
+    # 役職
+    if card.position:
+        lines.append(f"TITLE:{_escape_vcard(card.position)}")
+
+    # 電話番号（全件）
+    type_map = {"mobile": "CELL", "fax": "FAX", "main": "WORK", "direct": "WORK"}
+    for phone in card.phones:
+        vcard_type = type_map.get(phone.phone_type, "WORK")
+        if vcard_type == "FAX":
+            lines.append(f"TEL;TYPE=WORK,FAX:{phone.phone_number}")
+        else:
+            lines.append(f"TEL;TYPE={vcard_type},VOICE:{phone.phone_number}")
+
+    # メールアドレス（全件）
+    for em in card.emails:
+        email_vcard_type = "WORK" if em.email_type == "company" else "HOME"
+        lines.append(f"EMAIL;TYPE={email_vcard_type}:{em.email}")
+
+    lines.append("END:VCARD")
+
+    vcard_text = "\r\n".join(lines) + "\r\n"
+
+    # ファイル名
+    filename_jp = quote(f"{name or 'contact'}.vcf")
+
+    return Response(
+        vcard_text,
+        mimetype="text/vcard; charset=utf-8",
+        headers={
+            "Content-Disposition": f"attachment; filename=\"contact.vcf\"; filename*=UTF-8''{filename_jp}"
+        },
+    )
