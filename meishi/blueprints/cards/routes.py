@@ -910,7 +910,6 @@ def vcard(card_id):
     # 氏名（1カラムなので姓名分割を試みる）
     name = card.name_kanji or ""
     name_escaped = _escape_vcard(name)
-    # スペース区切りで姓・名を分割（なければ姓のみ）
     parts = name.split() if name else [""]
     if len(parts) >= 2:
         last = _escape_vcard(parts[0])
@@ -921,15 +920,22 @@ def vcard(card_id):
     lines.append(f"N:{last};{first};;;")
     lines.append(f"FN:{name_escaped}")
 
-    # フリガナ（1カラム、スペースで姓名分割）
+    # フリガナ（漢字と同じ分割数に合わせる）
     kana = card.name_kana or ""
     if kana:
         kana_parts = kana.split()
-        if len(kana_parts) >= 2:
-            lines.append(f"X-PHONETIC-LAST-NAME:{_escape_vcard(kana_parts[0])}")
-            lines.append(f"X-PHONETIC-FIRST-NAME:{_escape_vcard(' '.join(kana_parts[1:]))}")
+        if len(parts) >= 2 and len(kana_parts) >= 2:
+            # 漢字が姓名分割できている場合：カナも同じ位置で分割
+            kana_last = _escape_vcard(kana_parts[0])
+            kana_first = _escape_vcard(" ".join(kana_parts[1:]))
         else:
-            lines.append(f"X-PHONETIC-LAST-NAME:{_escape_vcard(kana_parts[0])}")
+            # 分割できない場合：全体を姓として設定
+            kana_last = _escape_vcard(kana)
+            kana_first = ""
+        lines.append(f"X-PHONETIC-LAST-NAME:{kana_last}")
+        lines.append(f"X-PHONETIC-FIRST-NAME:{kana_first}")
+        # SORT-STRING：iOSがフリガナを無視するケースの対策
+        lines.append(f"SORT-STRING:{_escape_vcard(kana)}")
 
     # 会社・部署
     if card.company:
