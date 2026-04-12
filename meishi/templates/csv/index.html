@@ -47,5 +47,30 @@
             </div>
         </div>
     </div>
+
+    <!-- 氏名更新 -->
+    <div class="col-12 col-md-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-pencil-square me-1"></i>氏名・フリガナ一括更新
+                </h5>
+                <p class="card-text text-muted">
+                    エクスポートしたCSVのname_kanji・name_kanaを修正し、
+                    IDに一致する名刺の氏名・フリガナのみを上書き更新します。
+                    他のデータには影響しません。
+                </p>
+                <form action="{{ url_for('csv_io.update_names') }}" method="post" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <input type="file" class="form-control" name="csv_file" accept=".csv" required>
+                    </div>
+                    <button type="submit" class="btn btn-warning"
+                            onclick="return confirm('CSVのIDに一致する名刺の氏名・フリガナを上書きします。よろしいですか？')">
+                        <i class="bi bi-pencil-square me-1"></i>更新実行
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}

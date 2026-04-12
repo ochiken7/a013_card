@@ -203,3 +203,53 @@ def import_csv():
         flash(f"インポートに失敗しました: {str(e)}", "danger")
 
     return redirect(url_for("csv_io.index"))
+
+
+@csv_bp.route("/csv/update-names", methods=["POST"])
+@login_required
+def update_names():
+    """CSVのidに一致する名刺の氏名・フリガナのみ上書き更新"""
+    file = request.files.get("csv_file")
+    if not file or file.filename == "":
+        flash("CSVファイルを選択してください。", "warning")
+        return redirect(url_for("csv_io.index"))
+
+    try:
+        raw = file.read()
+        text = raw.decode("utf-8-sig")
+        reader = csv.reader(io.StringIO(text))
+
+        header = next(reader, None)
+        if header is None:
+            flash("CSVファイルが空です。", "warning")
+            return redirect(url_for("csv_io.index"))
+
+        updated_count = 0
+
+        for row in reader:
+            if not row or len(row) < 7:
+                continue
+
+            card_id = row[0].strip()
+            if not card_id.isdigit():
+                continue
+
+            name_kanji = row[5].strip() if len(row) > 5 else ""
+            name_kana = row[6].strip() if len(row) > 6 else ""
+
+            card = Card.query.get(int(card_id))
+            if not card:
+                continue
+
+            card.name_kanji = name_kanji or None
+            card.name_kana = name_kana or None
+            updated_count += 1
+
+        db.session.commit()
+        flash(f"{updated_count}件の氏名・フリガナを更新しました。", "success")
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"更新に失敗しました: {str(e)}", "danger")
+
+    return redirect(url_for("csv_io.index"))
