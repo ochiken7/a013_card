@@ -39,8 +39,8 @@ USER_PROMPT_TEMPLATE = """以下のOCRテキストから名刺情報を構造化
   "company_name_kana": "会社名フリガナ（カタカナ、法人格除外）",
   "department": "部署名 ※なければnull",
   "position": "役職 ※なければnull",
-  "name_kanji": "氏名（漢字）",
-  "name_kana": "氏名（フリガナ・カタカナ）※漢字から推測して必ず生成",
+  "name_kanji": "氏名（漢字）※姓と名の間に半角スペースを入れる（例: 山田 太郎）",
+  "name_kana": "氏名（フリガナ・カタカナ）※漢字から推測して必ず生成。姓と名の間に半角スペースを入れる（例: ヤマダ タロウ）",
   "name_romaji": "氏名（ローマ字）※なければnull",
   "phones": [
     {{
