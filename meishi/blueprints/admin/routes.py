@@ -88,6 +88,53 @@ def toggle_admin(user_id):
     return redirect(url_for("admin.user_list"))
 
 
+@admin_bp.route("/admin/users/<int:user_id>/edit", methods=["POST"])
+@admin_required
+def edit_user(user_id):
+    """ユーザー情報の編集（名前・メール）"""
+    user = User.query.get_or_404(user_id)
+    display_name = request.form.get("display_name", "").strip()
+    email = request.form.get("email", "").strip()
+
+    if not display_name or not email:
+        flash("名前とメールアドレスは必須です。", "danger")
+        return redirect(url_for("admin.user_list"))
+
+    # メール重複チェック
+    existing = User.query.filter_by(email=email).first()
+    if existing and existing.id != user.id:
+        flash("このメールアドレスは既に使われています。", "danger")
+        return redirect(url_for("admin.user_list"))
+
+    old_name = user.display_name
+    user.display_name = display_name
+    user.email = email
+    db.session.commit()
+    flash(f"「{old_name}」のユーザー情報を更新しました。", "success")
+    return redirect(url_for("admin.user_list"))
+
+
+@admin_bp.route("/admin/users/<int:user_id>/delete", methods=["POST"])
+@admin_required
+def delete_user(user_id):
+    """ユーザー削除（自分以外のみ）"""
+    if user_id == current_user.id:
+        flash("自分自身は削除できません。", "danger")
+        return redirect(url_for("admin.user_list"))
+
+    user = User.query.get_or_404(user_id)
+    name = user.display_name
+
+    # 名刺の registered_by を NULL にする（名刺データは残す）
+    from meishi.models.card import Card
+    Card.query.filter_by(registered_by=user.id).update({"registered_by": current_user.id})
+
+    db.session.delete(user)
+    db.session.commit()
+    flash(f"ユーザー「{name}」を削除しました。名刺データはあなたの管理に移行されました。", "info")
+    return redirect(url_for("admin.user_list"))
+
+
 # ========== タグ管理 ==========
 
 @admin_bp.route("/admin/tags")

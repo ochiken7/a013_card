@@ -41,6 +41,11 @@
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li>
+                                <button class="dropdown-item" onclick="editUser({{ user.id }}, '{{ user.display_name }}', '{{ user.email }}')">
+                                    <i class="bi bi-pencil me-1"></i>編集
+                                </button>
+                            </li>
+                            <li>
                                 <button class="dropdown-item" data-bs-toggle="modal"
                                         data-bs-target="#resetModal{{ user.id }}">
                                     <i class="bi bi-key me-1"></i>パスワードリセット
@@ -52,6 +57,15 @@
                                     <button type="submit" class="dropdown-item">
                                         <i class="bi bi-shield me-1"></i>
                                         {{ '管理者権限を解除' if user.is_admin else '管理者権限を付与' }}
+                                    </button>
+                                </form>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form method="post" action="{{ url_for('admin.delete_user', user_id=user.id) }}"
+                                      onsubmit="return confirm('ユーザー「{{ user.display_name }}」を削除しますか？\n※登録した名刺データはあなたの管理に移行されます。')">
+                                    <button type="submit" class="dropdown-item text-danger">
+                                        <i class="bi bi-trash me-1"></i>削除
                                     </button>
                                 </form>
                             </li>
@@ -86,4 +100,43 @@
         </tbody>
     </table>
 </div>
+
+<!-- ユーザー編集モーダル -->
+<div class="modal fade" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="editUserForm" method="post">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">ユーザー情報を編集</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small">表示名</label>
+                        <input type="text" name="display_name" id="editUserName" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">メールアドレス</label>
+                        <input type="email" name="email" id="editUserEmail" class="form-control" required>
+                    </div>
+                </div>
+                <div class="modal-footer py-1">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="submit" class="btn btn-dark btn-sm">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function editUser(userId, name, email) {
+    document.getElementById('editUserForm').action = `/admin/users/${userId}/edit`;
+    document.getElementById('editUserName').value = name;
+    document.getElementById('editUserEmail').value = email;
+    new bootstrap.Modal(document.getElementById('editUserModal')).show();
+}
+</script>
 {% endblock %}
