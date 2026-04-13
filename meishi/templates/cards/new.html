@@ -9,6 +9,12 @@
     <!-- 表面画像 -->
     <div class="mb-3">
         <label class="form-label fw-bold">表面の画像 <span class="text-danger">*</span></label>
+        <!-- ドロップゾーン（PC用） -->
+        <div id="front-dropzone" class="dropzone d-none d-md-block mb-2"
+             ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropFile(event, 'front')">
+            <i class="bi bi-cloud-arrow-up" style="font-size: 2rem;"></i>
+            <div class="small mt-1">ここにファイルをドラッグ＆ドロップ</div>
+        </div>
         <div id="front-preview" class="mb-2" style="display:none;">
             <div class="text-center">
                 <img id="front-preview-img" class="img-fluid rounded border" style="max-height: 200px;">
@@ -30,6 +36,12 @@
     <div class="mb-3">
         <div id="back-section" style="display:none;">
             <label class="form-label fw-bold">裏面の画像</label>
+            <!-- ドロップゾーン（PC用） -->
+            <div id="back-dropzone" class="dropzone d-none d-md-block mb-2"
+                 ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropFile(event, 'back')">
+                <i class="bi bi-cloud-arrow-up" style="font-size: 2rem;"></i>
+                <div class="small mt-1">ここにファイルをドラッグ＆ドロップ</div>
+            </div>
             <div id="back-preview" class="mb-2" style="display:none;">
                 <div class="text-center">
                     <img id="back-preview-img" class="img-fluid rounded border" style="max-height: 200px;">
@@ -69,11 +81,27 @@
         <a href="{{ url_for('cards.index') }}" class="btn btn-outline-secondary">キャンセル</a>
     </div>
 </form>
+
+<style>
+.dropzone {
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    padding: 24px;
+    text-align: center;
+    color: #999;
+    cursor: pointer;
+    transition: border-color 0.2s, background-color 0.2s;
+}
+.dropzone.dragover {
+    border-color: #333;
+    background-color: #f0f0f0;
+    color: #333;
+}
+</style>
 {% endblock %}
 
 {% block scripts %}
 <script>
-// 処理済みファイルを保持（画像=圧縮Blob、PDF=元ファイル）
 const preparedFiles = { front: null, back: null };
 const isPdf = { front: false, back: false };
 const MAX_SIZE = 2048;
@@ -89,27 +117,49 @@ function pickImage(side, useCamera) {
     picker.click();
 }
 
+// input要素からのファイル選択
 function handleFile(input, side) {
     if (!input.files || !input.files[0]) return;
-    const file = input.files[0];
+    processFile(input.files[0], side);
+}
 
-    if (file.type === 'application/pdf') {
-        // PDFサイズ制限（30MB）
+// ドラッグ＆ドロップ
+function dragOver(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add('dragover');
+}
+function dragLeave(e) {
+    e.currentTarget.classList.remove('dragover');
+}
+function dropFile(e, side) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('dragover');
+    if (!e.dataTransfer.files || !e.dataTransfer.files[0]) return;
+    processFile(e.dataTransfer.files[0], side);
+}
+
+// ドロップゾーンのクリックでもファイル選択を開く
+document.querySelectorAll('.dropzone').forEach(function(zone) {
+    zone.addEventListener('click', function() {
+        const side = this.id.replace('-dropzone', '');
+        pickImage(side, false);
+    });
+});
+
+// 共通ファイル処理
+function processFile(file, side) {
+    if (file.type === 'application/pdf' || (file.name && file.name.toLowerCase().endsWith('.pdf'))) {
         if (file.size > 30 * 1024 * 1024) {
             alert('PDFファイルが大きすぎます（上限30MB）。');
-            input.value = '';
             return;
         }
-        // PDFはそのまま保持（サーバー側で画像変換）
         preparedFiles[side] = file;
         isPdf[side] = true;
-        // プレビューにPDFアイコンを表示
         const previewDiv = document.getElementById(side + '-preview');
         const previewImg = document.getElementById(side + '-preview-img');
         previewImg.src = '';
         previewImg.alt = 'PDF: ' + file.name;
         previewImg.style.display = 'none';
-        // PDFラベルを表示
         let label = previewDiv.querySelector('.pdf-label');
         if (!label) {
             label = document.createElement('div');
@@ -119,7 +169,9 @@ function handleFile(input, side) {
         label.innerHTML = '<i class="bi bi-file-earmark-pdf" style="font-size:2.5rem;color:#dc3545;"></i>'
             + '<div class="small text-muted mt-1">' + file.name + '</div>';
         previewDiv.style.display = 'block';
-        // PDFの場合は裏面セクションを隠す（PDF内に含まれるため）
+        // ドロップゾーンを隠す
+        const dropzone = document.getElementById(side + '-dropzone');
+        if (dropzone) dropzone.style.display = 'none';
         if (side === 'front') {
             document.getElementById('back-section').style.display = 'none';
             document.getElementById('add-back-btn').style.display = 'none';
@@ -127,12 +179,10 @@ function handleFile(input, side) {
         return;
     }
 
-    // 画像: Canvasで縮小してBlobにする
+    // 画像処理
     isPdf[side] = false;
-    // PDFから画像に戻した場合、裏面ボタンを復活
     if (side === 'front') {
         document.getElementById('add-back-btn').style.display = '';
-        // PDFラベルがあれば消す
         const oldLabel = document.getElementById('front-preview').querySelector('.pdf-label');
         if (oldLabel) oldLabel.remove();
         document.getElementById('front-preview-img').style.display = '';
@@ -167,6 +217,9 @@ function handleFile(input, side) {
                 const previewImg = document.getElementById(side + '-preview-img');
                 previewImg.src = URL.createObjectURL(blob);
                 previewDiv.style.display = 'block';
+                // ドロップゾーンを隠す
+                const dropzone = document.getElementById(side + '-dropzone');
+                if (dropzone) dropzone.style.display = 'none';
             }, 'image/jpeg', JPEG_QUALITY);
         };
         img.onerror = function() {
@@ -180,7 +233,7 @@ function handleFile(input, side) {
     reader.readAsDataURL(file);
 }
 
-// フォーム送信を横取りして、処理済みファイルをFormDataで送る
+// フォーム送信
 document.getElementById('upload-form').addEventListener('submit', function(e) {
     e.preventDefault();
 
