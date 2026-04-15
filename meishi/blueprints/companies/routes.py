@@ -11,26 +11,22 @@ from meishi.services.a001_api import search_clients
 
 
 def _get_company_section(company):
-    """会社のフリガナからセクション名を返す"""
+    """会社のフリガナから個別カナ文字のセクション名を返す（濁音・半濁音は清音に統一）"""
     kana = company.name_kana
     if not kana:
         return "その他"
     char = kana[0]
-    kana_groups = [
-        ("ア", "アイウエオ"),
-        ("カ", "カキクケコガギグゲゴ"),
-        ("サ", "サシスセソザジズゼゾ"),
-        ("タ", "タチツテトダヂヅデド"),
-        ("ナ", "ナニヌネノ"),
-        ("ハ", "ハヒフヘホバビブベボパピプペポ"),
-        ("マ", "マミムメモ"),
-        ("ヤ", "ヤユヨ"),
-        ("ラ", "ラリルレロ"),
-        ("ワ", "ワヲン"),
-    ]
-    for section_name, chars in kana_groups:
-        if char in chars:
-            return section_name
+    kana_normalize = {
+        "ガ": "カ", "ギ": "キ", "グ": "ク", "ゲ": "ケ", "ゴ": "コ",
+        "ザ": "サ", "ジ": "シ", "ズ": "ス", "ゼ": "セ", "ゾ": "ソ",
+        "ダ": "タ", "ヂ": "チ", "ヅ": "ツ", "デ": "テ", "ド": "ト",
+        "バ": "ハ", "ビ": "ヒ", "ブ": "フ", "ベ": "ヘ", "ボ": "ホ",
+        "パ": "ハ", "ピ": "ヒ", "プ": "フ", "ペ": "ヘ", "ポ": "ホ",
+        "ヲ": "ワ", "ン": "ワ",
+    }
+    normalized = kana_normalize.get(char, char)
+    if "ア" <= normalized <= "ン":
+        return normalized
     upper = char.upper()
     if "A" <= upper <= "Z":
         return upper
@@ -59,12 +55,6 @@ def index():
 
     all_sections = list(sections.keys())
 
-    # 各会社のフリガナ先頭文字を集める（ボタンのハイライト用）
-    all_kana_chars = set()
-    for company, _count in companies:
-        if company.name_kana:
-            all_kana_chars.add(company.name_kana[0])
-
     # 統合済みの会社
     merged = Company.query.filter(Company.merged_into_id.isnot(None)).all()
 
@@ -72,7 +62,6 @@ def index():
         "companies/index.html",
         sections=sections,
         all_sections=all_sections,
-        all_kana_chars=all_kana_chars,
         companies=companies,
         merged=merged,
     )

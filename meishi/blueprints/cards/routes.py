@@ -133,17 +133,11 @@ def index():
     # インデックスボタン用: 存在するセクション一覧
     all_sections = list(sections.keys())
 
-    # 各カードのフリガナ先頭文字を集める（ボタンのハイライト用）
-    all_kana_chars = set()
-    for card in cards:
-        if card.name_kana:
-            all_kana_chars.add(card.name_kana[0])
 
     return render_template(
         "cards/index.html",
         sections=sections,
         all_sections=all_sections,
-        all_kana_chars=all_kana_chars,
         flat_cards=[],
         duplicate_ids=duplicate_ids,
         query=query,
@@ -155,22 +149,20 @@ def index():
 
 
 def _get_kana_section(char):
-    """カナ文字・アルファベットからセクション名を返す"""
-    kana_groups = [
-        ("ア", "アイウエオ"),
-        ("カ", "カキクケコガギグゲゴ"),
-        ("サ", "サシスセソザジズゼゾ"),
-        ("タ", "タチツテトダヂヅデド"),
-        ("ナ", "ナニヌネノ"),
-        ("ハ", "ハヒフヘホバビブベボパピプペポ"),
-        ("マ", "マミムメモ"),
-        ("ヤ", "ヤユヨ"),
-        ("ラ", "ラリルレロ"),
-        ("ワ", "ワヲン"),
-    ]
-    for section_name, chars in kana_groups:
-        if char in chars:
-            return section_name
+    """カナ文字・アルファベットからセクション名を返す（濁音・半濁音は清音に統一）"""
+    # 濁音・半濁音を清音にマップ
+    kana_normalize = {
+        "ガ": "カ", "ギ": "キ", "グ": "ク", "ゲ": "ケ", "ゴ": "コ",
+        "ザ": "サ", "ジ": "シ", "ズ": "ス", "ゼ": "セ", "ゾ": "ソ",
+        "ダ": "タ", "ヂ": "チ", "ヅ": "ツ", "デ": "テ", "ド": "ト",
+        "バ": "ハ", "ビ": "ヒ", "ブ": "フ", "ベ": "ヘ", "ボ": "ホ",
+        "パ": "ハ", "ピ": "ヒ", "プ": "フ", "ペ": "ヘ", "ポ": "ホ",
+        "ヲ": "ワ", "ン": "ワ",
+    }
+    # カタカナ（清音）なら個別文字を返す
+    normalized = kana_normalize.get(char, char)
+    if "ア" <= normalized <= "ン":
+        return normalized
     # A-Z対応
     upper = char.upper()
     if "A" <= upper <= "Z":
