@@ -41,7 +41,7 @@
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li>
-                                <button class="dropdown-item" onclick="editUser({{ user.id }}, '{{ user.display_name }}', '{{ user.email }}')">
+                                <button class="dropdown-item" onclick='editUser({{ user.id }}, {{ user.display_name|tojson }}, {{ user.email|tojson }})'>
                                     <i class="bi bi-pencil me-1"></i>編集
                                 </button>
                             </li>
@@ -63,7 +63,8 @@
                             <li><hr class="dropdown-divider"></li>
                             <li>
                                 <form method="post" action="{{ url_for('admin.delete_user', user_id=user.id) }}"
-                                      onsubmit="return confirm('ユーザー「{{ user.display_name }}」を削除しますか？\n※登録した名刺データはあなたの管理に移行されます。')">
+                                      data-user-name="{{ user.display_name }}"
+                                      onsubmit="return confirmUserDelete(this)">
                                     <button type="submit" class="dropdown-item text-danger">
                                         <i class="bi bi-trash me-1"></i>削除
                                     </button>
@@ -137,6 +138,11 @@ function editUser(userId, name, email) {
     document.getElementById('editUserName').value = name;
     document.getElementById('editUserEmail').value = email;
     new bootstrap.Modal(document.getElementById('editUserModal')).show();
+}
+
+function confirmUserDelete(form) {
+    const name = form.dataset.userName || '';
+    return confirm('ユーザー「' + name + '」を削除しますか？\n※登録した名刺データはあなたの管理に移行されます。');
 }
 </script>
 {% endblock %}

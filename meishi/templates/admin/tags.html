@@ -30,12 +30,13 @@
         <div class="d-flex gap-1">
             <!-- 編集 -->
             <button type="button" class="btn btn-outline-dark btn-sm"
-                    onclick="editTag({{ tag.id }}, '{{ tag.name }}')">
+                    onclick='editTag({{ tag.id }}, {{ tag.name|tojson }})'>
                 <i class="bi bi-pencil"></i>
             </button>
             <!-- 削除 -->
             <form method="post" action="{{ url_for('admin.delete_tag', tag_id=tag.id) }}"
-                  onsubmit="return confirm('タグ「{{ tag.name }}」を削除しますか？\n紐付けられた名刺からも外れます。')">
+                  data-tag-name="{{ tag.name }}"
+                  onsubmit="return confirmTagDelete(this)">
                 <button type="submit" class="btn btn-outline-danger btn-sm">
                     <i class="bi bi-trash"></i>
                 </button>
@@ -79,6 +80,11 @@ function editTag(tagId, currentName) {
     document.getElementById('editTagForm').action = `/admin/tags/${tagId}/edit`;
     document.getElementById('editTagName').value = currentName;
     new bootstrap.Modal(document.getElementById('editTagModal')).show();
+}
+
+function confirmTagDelete(form) {
+    const name = form.dataset.tagName || '';
+    return confirm('タグ「' + name + '」を削除しますか？\n紐付けられた名刺からも外れます。');
 }
 
 // ドラッグ＆ドロップ並び替え

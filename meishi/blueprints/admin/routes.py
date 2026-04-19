@@ -125,10 +125,10 @@ def delete_user(user_id):
     user = User.query.get_or_404(user_id)
     name = user.display_name
 
-    # 名刺の registered_by を NULL にする（名刺データは残す）
+    # 名刺の registered_by を管理者に移行してから削除
     from meishi.models.card import Card
     Card.query.filter_by(registered_by=user.id).update({"registered_by": current_user.id})
-
+    db.session.flush()  # 移行を確定させてからユーザー削除
     db.session.delete(user)
     db.session.commit()
     flash(f"ユーザー「{name}」を削除しました。名刺データはあなたの管理に移行されました。", "info")
