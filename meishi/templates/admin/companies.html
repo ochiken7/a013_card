@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}全会社一覧（管理） - 名刺管理{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4><i class="bi bi-building-gear me-1"></i>全会社一覧（管理）</h4>
+    <a href="{{ url_for('companies.index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>通常の会社一覧
+    </a>
+</div>
+
+<p class="text-muted small">
+    visibilityを問わず全会社を表示します。「自分のみ」設定の名刺しかない会社も含まれます。<br>
+    ID順に並んでおり、a001顧客システムとID連携するメンテナンス用画面です。
+</p>
+
+<!-- 検索フォーム -->
+<form method="get" action="{{ url_for('admin.company_list') }}" class="mb-3 d-flex gap-2">
+    <input type="text" name="q" value="{{ keyword }}" class="form-control form-control-sm"
+           placeholder="会社名・フリガナ・IDで検索">
+    <button type="submit" class="btn btn-dark btn-sm flex-shrink-0">
+        <i class="bi bi-search me-1"></i>検索
+    </button>
+    {% if keyword %}
+    <a href="{{ url_for('admin.company_list') }}" class="btn btn-outline-secondary btn-sm flex-shrink-0">クリア</a>
+    {% endif %}
+</form>
+
+<p class="text-muted small">{{ companies|length }}件の会社</p>
+
+{% if companies %}
+<div class="table-responsive">
+    <table class="table table-sm align-middle">
+        <thead>
+            <tr>
+                <th style="width: 80px;">ID</th>
+                <th>会社名</th>
+                <th>フリガナ</th>
+                <th class="text-end">名刺</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for company, count in companies %}
+            <tr>
+                <td class="text-muted">{{ company.id }}</td>
+                <td class="fw-bold">{{ company.name_ja }}</td>
+                <td class="text-muted small">{{ company.name_kana or '-' }}</td>
+                <td class="text-end"><span class="badge bg-secondary">{{ count }}件</span></td>
+                <td>
+                    <a href="{{ url_for('companies.company_cards', company_id=company.id) }}"
+                       class="btn btn-outline-dark btn-sm">
+                        <i class="bi bi-pencil me-1"></i>ID変更
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="text-muted text-center py-4">該当する会社がありません。</p>
+{% endif %}
+{% endblock %}

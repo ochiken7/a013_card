@@ -97,15 +97,17 @@ def _position_sort_key(card):
 @companies_bp.route("/companies/<int:company_id>/cards")
 @login_required
 def company_cards(company_id):
-    """会社に属する名刺一覧（閲覧可能なもののみ・役職順）"""
+    """会社に属する名刺一覧（役職順）。管理者は全名刺、一般は閲覧可能な名刺のみ"""
     company = Company.query.get(company_id)
     if not company:
         return render_template("companies/not_found.html", company_id=company_id), 404
-    # 閲覧可能な名刺のみ取得
-    cards = Card.query.filter(
-        Card.company_id == company_id,
-        _visible_card_filter(),
-    ).all()
+    if current_user.is_admin:
+        cards = Card.query.filter(Card.company_id == company_id).all()
+    else:
+        cards = Card.query.filter(
+            Card.company_id == company_id,
+            _visible_card_filter(),
+        ).all()
     # 閲覧可能な名刺が0件ならアクセス不可扱い
     if not cards:
         return render_template("companies/not_found.html", company_id=company_id), 404

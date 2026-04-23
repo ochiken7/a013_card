@@ -660,8 +660,10 @@ def show_card(card_id):
     """名刺詳細画面"""
     card = Card.query.get_or_404(card_id)
 
-    # アクセス権チェック
-    if card.visibility == "private" and card.registered_by != current_user.id:
+    # アクセス権チェック（管理者は全て閲覧可能）
+    if (card.visibility == "private"
+            and card.registered_by != current_user.id
+            and not current_user.is_admin):
         abort(403)
 
     # 画像URLを取得

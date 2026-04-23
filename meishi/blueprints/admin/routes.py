@@ -5,8 +5,11 @@ from flask import render_template, redirect, url_for, flash, request, abort, jso
 from flask_login import login_required, current_user
 from meishi import db
 from meishi.blueprints.admin import admin_bp
+from sqlalchemy import func
 from meishi.models.user import User
 from meishi.models.tag import Tag, CardTag
+from meishi.models.company import Company
+from meishi.models.card import Card
 
 
 def admin_required(f):
@@ -221,3 +224,28 @@ def reorder_tags():
             tag.sort_order = i
     db.session.commit()
     return jsonify({"ok": True})
+
+
+# ========== 全会社一覧（管理者のみ、自分のみ設定も含む） ==========
+
+@admin_bp.route("/admin/companies")
+@admin_required
+def company_list():
+    """全会社一覧（visibility問わず・ID管理用）"""
+    # 全会社＋名刺件数（visibility問わず）
+    companies = (
+        db.session.query(Company, func.count(Card.id).label("card_count"))
+        .outerjoin(Card, Card.company_id == Company.id)
+        .filter(Company.merged_into_id.is_(None))
+        .group_by(Company.id)
+        .order_by(Company.id.asc())
+        .all()
+    )
+    # ID検索（オプション）
+    keyword = request.args.get("q", "").strip()
+    if keyword:
+        companies = [
+            (c, n) for c, n in companies
+            if keyword in (c.name_ja or "") or keyword in (c.name_kana or "") or keyword == str(c.id)
+        ]
+    return render_template("admin/companies.html", companies=companies, keyword=keyword)
