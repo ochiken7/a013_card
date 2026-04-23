@@ -897,6 +897,10 @@ def vcard(card_id):
     """vCardファイルを生成してダウンロード"""
     card = Card.query.get_or_404(card_id)
 
+    # アクセス権チェック
+    if card.visibility == "private" and card.registered_by != current_user.id:
+        abort(403)
+
     lines = ["BEGIN:VCARD", "VERSION:3.0"]
 
     # 氏名（1カラムなので姓名分割を試みる）

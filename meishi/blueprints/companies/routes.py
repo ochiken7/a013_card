@@ -1,13 +1,21 @@
 """会社グルーピング管理"""
 
 from flask import render_template, redirect, url_for, flash, request, jsonify
-from flask_login import login_required
-from sqlalchemy import func
+from flask_login import login_required, current_user
+from sqlalchemy import func, or_, and_
 from meishi import db
 from meishi.blueprints.companies import companies_bp
 from meishi.models.company import Company
 from meishi.models.card import Card
 from meishi.services.a001_api import search_clients
+
+
+def _visible_card_filter():
+    """現在のユーザーが閲覧可能な名刺の条件"""
+    return or_(
+        Card.visibility == "shared",
+        Card.registered_by == current_user.id,
+    )
 
 
 def _get_company_section(company):
@@ -36,13 +44,18 @@ def _get_company_section(company):
 @companies_bp.route("/companies")
 @login_required
 def index():
-    """会社一覧（名刺件数付き・五十音セクション）"""
-    # 有効な会社のみ（統合済み除外）+ 名刺件数
+    """会社一覧（閲覧可能な名刺件数付き・五十音セクション）"""
+    # 閲覧可能な名刺（shared または 自分が登録）のみ
+    visible_card_count = func.count(Card.id).label("card_count")
     companies = (
-        db.session.query(Company, func.count(Card.id).label("card_count"))
-        .outerjoin(Card, Card.company_id == Company.id)
+        db.session.query(Company, visible_card_count)
+        .outerjoin(Card, and_(
+            Card.company_id == Company.id,
+            _visible_card_filter(),
+        ))
         .filter(Company.merged_into_id.is_(None))
         .group_by(Company.id)
+        .having(visible_card_count > 0)  # 閲覧可能な名刺が1件以上ある会社だけ表示
         .order_by(Company.name_kana.asc().nullslast(), Company.name_ja.asc())
         .all()
     )
@@ -84,11 +97,18 @@ def _position_sort_key(card):
 @companies_bp.route("/companies/<int:company_id>/cards")
 @login_required
 def company_cards(company_id):
-    """会社に属する名刺一覧（役職順）"""
+    """会社に属する名刺一覧（閲覧可能なもののみ・役職順）"""
     company = Company.query.get(company_id)
     if not company:
         return render_template("companies/not_found.html", company_id=company_id), 404
-    cards = Card.query.filter_by(company_id=company_id).all()
+    # 閲覧可能な名刺のみ取得
+    cards = Card.query.filter(
+        Card.company_id == company_id,
+        _visible_card_filter(),
+    ).all()
+    # 閲覧可能な名刺が0件ならアクセス不可扱い
+    if not cards:
+        return render_template("companies/not_found.html", company_id=company_id), 404
     cards.sort(key=_position_sort_key)
     return render_template("companies/cards.html", company=company, cards=cards)
 
@@ -96,12 +116,17 @@ def company_cards(company_id):
 @companies_bp.route("/companies/merge", methods=["GET"])
 @login_required
 def merge_form():
-    """会社統合画面"""
+    """会社統合画面（閲覧可能な名刺が1件以上ある会社のみ）"""
+    visible_card_count = func.count(Card.id).label("card_count")
     companies = (
-        db.session.query(Company, func.count(Card.id).label("card_count"))
-        .outerjoin(Card, Card.company_id == Company.id)
+        db.session.query(Company, visible_card_count)
+        .outerjoin(Card, and_(
+            Card.company_id == Company.id,
+            _visible_card_filter(),
+        ))
         .filter(Company.merged_into_id.is_(None))
         .group_by(Company.id)
+        .having(visible_card_count > 0)
         .order_by(Company.name_kana.asc().nullslast(), Company.name_ja.asc())
         .all()
     )
