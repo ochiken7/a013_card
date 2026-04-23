@@ -253,3 +253,58 @@ def update_names():
         flash(f"更新に失敗しました: {str(e)}", "danger")
 
     return redirect(url_for("csv_io.index"))
+
+
+@csv_bp.route("/csv/update-companies", methods=["POST"])
+@login_required
+def update_companies():
+    """CSVのidに一致する名刺の会社名・会社名フリガナを上書き更新"""
+    file = request.files.get("csv_file")
+    if not file or file.filename == "":
+        flash("CSVファイルを選択してください。", "warning")
+        return redirect(url_for("csv_io.index"))
+
+    try:
+        raw = file.read()
+        text = raw.decode("utf-8-sig")
+        reader = csv.reader(io.StringIO(text))
+
+        header = next(reader, None)
+        if header is None:
+            flash("CSVファイルが空です。", "warning")
+            return redirect(url_for("csv_io.index"))
+
+        updated_companies = set()
+
+        for row in reader:
+            if not row or len(row) < 3:
+                continue
+
+            card_id = row[0].strip()
+            if not card_id.isdigit():
+                continue
+
+            company_name_ja = row[1].strip() if len(row) > 1 else ""
+            company_name_kana = row[2].strip() if len(row) > 2 else ""
+
+            card = Card.query.get(int(card_id))
+            if not card or not card.company:
+                continue
+
+            # 同じ会社は1度だけ更新
+            if card.company.id in updated_companies:
+                continue
+
+            if company_name_ja:
+                card.company.name_ja = company_name_ja
+            card.company.name_kana = company_name_kana or None
+            updated_companies.add(card.company.id)
+
+        db.session.commit()
+        flash(f"{len(updated_companies)}件の会社情報を更新しました。", "success")
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"更新に失敗しました: {str(e)}", "danger")
+
+    return redirect(url_for("csv_io.index"))
