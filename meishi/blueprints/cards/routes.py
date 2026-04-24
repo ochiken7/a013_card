@@ -848,6 +848,11 @@ def card_image(image_id):
 def add_tag(card_id):
     """名刺にタグを追加"""
     card = Card.query.get_or_404(card_id)
+    # 権限チェック: 自分の名刺・共有名刺・管理者のみ
+    if (card.visibility == "private"
+            and card.registered_by != current_user.id
+            and not current_user.is_admin):
+        abort(403)
     data = request.get_json()
     name = (data.get("name") or "").strip()
 
@@ -875,6 +880,11 @@ def add_tag(card_id):
 def remove_tag(card_id, tag_id):
     """名刺からタグを削除"""
     card = Card.query.get_or_404(card_id)
+    # 権限チェック: 自分の名刺・共有名刺・管理者のみ
+    if (card.visibility == "private"
+            and card.registered_by != current_user.id
+            and not current_user.is_admin):
+        abort(403)
     tag = Tag.query.get_or_404(tag_id)
 
     if tag in card.tags:

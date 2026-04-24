@@ -73,12 +73,14 @@
         </div>
     </div>
 
-    <!-- 会社名更新 -->
+    {% if current_user.is_admin %}
+    <!-- 会社名更新（管理者のみ） -->
     <div class="col-12 col-md-6">
         <div class="card h-100">
             <div class="card-body">
                 <h5 class="card-title">
                     <i class="bi bi-building-gear me-1"></i>会社名・フリガナ一括更新
+                    <span class="badge bg-dark ms-1">管理者</span>
                 </h5>
                 <p class="card-text text-muted">
                     エクスポートしたCSVのcompany_name_ja・company_name_kanaを修正し、
@@ -97,5 +99,6 @@
             </div>
         </div>
     </div>
+    {% endif %}
 </div>
 {% endblock %}

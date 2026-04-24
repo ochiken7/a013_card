@@ -4,7 +4,7 @@ import csv
 import io
 from datetime import datetime
 
-from flask import render_template, request, redirect, url_for, flash, Response
+from flask import render_template, request, redirect, url_for, flash, Response, abort
 from flask_login import login_required, current_user
 from sqlalchemy import or_
 
@@ -240,6 +240,9 @@ def update_names():
             card = Card.query.get(int(card_id))
             if not card:
                 continue
+            # 権限チェック: 自分の名刺または管理者のみ
+            if card.registered_by != current_user.id and not current_user.is_admin:
+                continue
 
             card.name_kanji = name_kanji or None
             card.name_kana = name_kana or None
@@ -258,7 +261,10 @@ def update_names():
 @csv_bp.route("/csv/update-companies", methods=["POST"])
 @login_required
 def update_companies():
-    """CSVのidに一致する名刺の会社名・会社名フリガナを上書き更新"""
+    """CSVのidに一致する名刺の会社名・会社名フリガナを上書き更新（管理者のみ）"""
+    # 会社名は共有データ（複数名刺が紐づく）のため、管理者のみ操作可能
+    if not current_user.is_admin:
+        abort(403)
     file = request.files.get("csv_file")
     if not file or file.filename == "":
         flash("CSVファイルを選択してください。", "warning")
